@@ -1,0 +1,10 @@
+{
+  "name": "whitespace ignored",
+  "ignore": "whitespace",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 2,
+    "truncated": false
+  }
+}

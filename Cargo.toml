@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/diff-core",
+  "crates/git-adapter",
+  "crates/diff-cli",
+  "apps/desktop/src-tauri"
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1"
+arboard = "3"
+clap = { version = "4", features = ["derive"] }
+diff-core = { path = "crates/diff-core" }
+git-adapter = { path = "crates/git-adapter" }
+ignore = "0.4"
+imara-diff = "0.2"
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+similar = "2"
+tauri = { version = "2", features = [] }
+tauri-build = "2"
+thiserror = "2"
+walkdir = "2"

@@ -1,0 +1,3 @@
+title = "Diff Tool"
+theme = "dark"
+timeout = 30

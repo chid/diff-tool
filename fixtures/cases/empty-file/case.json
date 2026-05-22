@@ -1,0 +1,10 @@
+{
+  "name": "empty file",
+  "ignore": "none",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 1,
+    "truncated": false
+  }
+}

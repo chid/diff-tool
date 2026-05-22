@@ -1,0 +1,24 @@
+{
+  "name": "diff-tool",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Cross-platform high-performance diff and merge tool prototype.",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/desktop run dev",
+    "build": "npm --workspace apps/desktop run build",
+    "preview": "npm --workspace apps/desktop run preview",
+    "tauri": "npm --workspace apps/desktop run tauri",
+    "check": "npm --workspace apps/desktop run check",
+    "test:rust": "CARGO_HOME=${CARGO_HOME:-/tmp/cargo-home} cargo test --workspace",
+    "test:fixtures": "CARGO_HOME=${CARGO_HOME:-/tmp/cargo-home} cargo test --workspace",
+    "perf": "node scripts/measure-performance.mjs",
+    "perf:quick": "node scripts/measure-performance.mjs --quick",
+    "test": "npm run check && npm run test:rust"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

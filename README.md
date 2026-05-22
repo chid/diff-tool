@@ -14,6 +14,7 @@ The workspace has three tracks:
 npm_config_cache=/tmp/npm-cache npm install
 npm run dev
 npm run test
+npm run perf:quick
 cargo run -p diff-cli -- diff README.md README.md --json
 ```
 

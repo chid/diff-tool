@@ -1,0 +1,10 @@
+{
+  "name": "crlf lf",
+  "ignore": "none",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 3,
+    "truncated": false
+  }
+}

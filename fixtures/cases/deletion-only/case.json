@@ -1,0 +1,10 @@
+{
+  "name": "deletion only",
+  "ignore": "none",
+  "expected": {
+    "additions": 0,
+    "deletions": 1,
+    "unchanged": 2,
+    "truncated": false
+  }
+}

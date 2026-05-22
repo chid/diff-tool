@@ -1,0 +1,10 @@
+{
+  "name": "insertion only",
+  "ignore": "none",
+  "expected": {
+    "additions": 1,
+    "deletions": 0,
+    "unchanged": 2,
+    "truncated": false
+  }
+}

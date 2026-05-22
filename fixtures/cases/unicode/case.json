@@ -1,0 +1,10 @@
+{
+  "name": "unicode text",
+  "ignore": "none",
+  "expected": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 2,
+    "truncated": false
+  }
+}

@@ -1,0 +1,31 @@
+# Cross-Platform Diff Tool Implementation Plan
+
+## Product Direction
+
+Build a local-first desktop diff/merge app for macOS, Windows, and Linux. The
+app competes with Kaleidoscope, Beyond Compare, Araxis, DeltaWalker, and P4Merge
+as a standalone comparison tool, while borrowing Git-context ideas from Sublime
+Merge, Tower, Fork, GitKraken, and SmartGit.
+
+`@pierre/diffs` and `@pierre/trees` are Phase 1 build-vs-buy candidates, not
+market competitors. The default Phase 1 path is to wrap them for the UI and keep
+the core diff, filesystem, Git, merge, and image work in Rust.
+
+## Phases
+
+1. Dependency and UX spike: validate Tauri + React, `@pierre/diffs`, and
+   `@pierre/trees` against large diff/tree workloads.
+2. Rust core: implement stable backend models for text diffs, folder diffs,
+   Git status, conflicts, and image metadata.
+3. Desktop product: build file/folder/Git/conflict workflows on top of the
+   stable IPC contract.
+4. Test corpus and performance: import open fixtures, add golden tests, and
+   benchmark against large repositories.
+
+## Exit Criteria For Phase 1
+
+- The desktop shell can render a changed-file tree and a split diff.
+- The UI wrapper layer can switch between Pierre-backed and fallback rendering.
+- A local Git repo can be scanned from Rust and displayed in the app.
+- Rust tests and TypeScript checks run from one command.
+- Packaging blockers, license issues, and performance limits are documented.

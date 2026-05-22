@@ -1,0 +1,3 @@
+title = "Diff Tool"
+theme = "system"
+timeout = 30

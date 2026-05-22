@@ -1,0 +1,267 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #111314;
+  color: #eef1f3;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  min-height: 100vh;
+  background: #111314;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-right: 1px solid #30363a;
+  background: #181b1d;
+  min-width: 0;
+  padding: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.mode-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mode-list button,
+.toolbar-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid #384047;
+  border-radius: 6px;
+  background: #202528;
+  color: #d8dee3;
+  cursor: pointer;
+}
+
+.mode-list button.active,
+.toolbar-actions button.active {
+  border-color: #4da3ff;
+  background: #15324d;
+  color: #f8fbff;
+}
+
+.tree-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel-heading,
+.file-header,
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-heading {
+  color: #aeb8c1;
+  font-size: 13px;
+}
+
+.tree-search input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #343c42;
+  border-radius: 6px;
+  background: #101315;
+  color: #f1f4f6;
+  padding: 0 10px;
+}
+
+.tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tree-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #d8dee3;
+  text-align: left;
+  padding: 0 8px;
+}
+
+.tree-row.active {
+  background: #25313a;
+}
+
+.status {
+  color: #aeb8c1;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.status.added {
+  color: #67d391;
+}
+
+.status.modified {
+  color: #73b9ff;
+}
+
+.status.deleted {
+  color: #ff7a85;
+}
+
+.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.toolbar {
+  min-height: 72px;
+  border-bottom: 1px solid #30363a;
+  padding: 14px 18px;
+}
+
+.toolbar h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.toolbar p {
+  margin: 0;
+  color: #aeb8c1;
+  font-size: 13px;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar-actions button {
+  min-width: 86px;
+  padding: 0 10px;
+}
+
+.diff-pane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.file-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid #30363a;
+  background: #151819;
+  color: #c7d0d8;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  padding: 9px 14px;
+}
+
+.diff-grid {
+  min-width: 720px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 58px 58px 24px minmax(0, 1fr);
+  min-height: 20px;
+}
+
+.diff-line.addition {
+  background: rgba(38, 167, 106, 0.14);
+}
+
+.diff-line.deletion {
+  background: rgba(235, 83, 91, 0.14);
+}
+
+.line-no,
+.marker {
+  user-select: none;
+  color: #81909b;
+  text-align: right;
+  padding: 0 8px;
+}
+
+.marker {
+  text-align: center;
+}
+
+.diff-line code {
+  overflow: hidden;
+  white-space: pre;
+  padding-right: 12px;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    max-height: 42vh;
+    border-right: 0;
+    border-bottom: 1px solid #30363a;
+  }
+
+  .toolbar,
+  .toolbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

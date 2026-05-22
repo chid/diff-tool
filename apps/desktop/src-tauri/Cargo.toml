@@ -1,0 +1,17 @@
+[package]
+name = "diff-tool-desktop"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+diff-core.workspace = true
+git-adapter.workspace = true
+serde.workspace = true
+tauri.workspace = true
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

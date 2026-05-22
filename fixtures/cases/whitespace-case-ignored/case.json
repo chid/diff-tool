@@ -1,0 +1,10 @@
+{
+  "name": "whitespace and case ignored",
+  "ignore": "whitespace-and-case",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 2,
+    "truncated": false
+  }
+}
