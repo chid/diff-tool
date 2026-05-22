@@ -1,22 +1,103 @@
 # Diff Tool
 
-Greenfield prototype for a cross-platform, local-first diff and merge tool.
+Cross-platform, local-first diff and merge tool prototype.
 
-The workspace has three tracks:
+The current repository is a working scaffold, not a finished product. It has a
+Rust backend, a Tauri/React desktop shell, fixture-driven tests, example inputs,
+and a synthetic performance harness.
 
-- Rust core crates for deterministic diff, folder, Git, and CLI behavior.
-- Tauri + React desktop shell for the product surface.
-- Research and agent briefs for splitting implementation work across agents.
+## Goals
 
-## Commands
+- Fast text, folder, Git, merge, and image comparison on macOS, Windows, and
+  Linux.
+- Local-first behavior with deterministic, testable core data models.
+- A desktop UI that can use `@pierre/diffs` and `@pierre/trees` where they fit,
+  while keeping the expensive comparison work in Rust.
+- Developer ergonomics good enough for multiple agents or contributors to work
+  in parallel without stepping on each other.
+
+## Repository Layout
+
+```text
+apps/desktop/        Tauri 2 + React desktop shell
+crates/diff-core/    Text diff models and comparison logic
+crates/git-adapter/  Filesystem and future Git/folder integration
+crates/diff-cli/     `dt` command-line entrypoint
+docs/                Architecture, implementation, and process docs
+examples/            Small runnable examples for humans and agents
+fixtures/            Fixture cases for regression tests
+scripts/             Test and performance helper scripts
+benches/             Benchmark notes and future large-repo benchmark work
+```
+
+## Prerequisites
+
+- Node.js 22+
+- npm 10+
+- Rust 1.95+
+- A platform supported by Tauri 2
+
+On this machine, use a temp npm cache until `~/.npm` ownership is fixed:
 
 ```bash
 npm_config_cache=/tmp/npm-cache npm install
-npm run dev
-npm run test
-npm run perf:quick
-cargo run -p diff-cli -- diff README.md README.md --json
 ```
 
-Use `npm_config_cache=/tmp/npm-cache` on this machine until the local npm cache
-ownership problem in `~/.npm` is repaired.
+## Common Commands
+
+```bash
+npm run dev
+npm run build
+npm run test
+npm run perf:quick
+cargo run -p diff-cli -- diff examples/text-basic/left.txt examples/text-basic/right.txt --json
+```
+
+Use `./scripts/check.sh` before handing work to another agent or opening a PR.
+It runs TypeScript checks and the Rust test suite with a writable Cargo cache.
+
+## Current Status
+
+Implemented:
+
+- Workspace scaffold with Rust crates and desktop app.
+- Initial diff JSON model and `dt diff` CLI.
+- Basic folder scan model and `dt dir` CLI.
+- Tauri command bridge for file compare and tree scan.
+- Desktop mock workbench with changed-file list and split diff view.
+- Fixture cases, CLI tests, adapter tests, examples, and performance runner.
+
+Not implemented yet:
+
+- Multi-hunk/context-aware diff output.
+- Real Git status, commit comparison, blame, or conflict discovery.
+- Real folder comparison between left/right trees.
+- Merge resolution.
+- Pierre component integration in the live UI.
+- Image/table/archive comparison.
+
+See [TODO.md](TODO.md) for the prioritized backlog.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Development Guide](docs/development.md)
+- [Testing and Performance](docs/testing-and-performance.md)
+- [Implementation Plan](docs/implementation-plan.md)
+- [Agent Work Packages](docs/agent-work-packages.md)
+- [Contributing](CONTRIBUTING.md)
+
+## Performance Baseline
+
+Run:
+
+```bash
+npm run perf
+```
+
+The latest report is written to `target/perf/latest.json`. Generated perf
+fixtures live under `target/perf/fixtures` and are intentionally not committed.
+
+The current baseline has one known pathological case:
+`many-small-lines-churn` takes about 68 seconds on the first measured machine.
+That is expected to drive the next diff-engine improvement.

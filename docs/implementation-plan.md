@@ -29,3 +29,17 @@ the core diff, filesystem, Git, merge, and image work in Rust.
 - A local Git repo can be scanned from Rust and displayed in the app.
 - Rust tests and TypeScript checks run from one command.
 - Packaging blockers, license issues, and performance limits are documented.
+
+## Documentation System
+
+Use the root docs as the canonical handoff surface:
+
+- `README.md`: project overview, setup, common commands, and current status.
+- `TODO.md`: prioritized backlog and known technical debt.
+- `CONTRIBUTING.md`: contribution workflow and quality bar.
+- `docs/architecture.md`: current system boundaries and data flow.
+- `docs/development.md`: developer setup and common implementation workflows.
+- `docs/testing-and-performance.md`: test commands, fixture rules, and perf
+  runner behavior.
+- `docs/decisions/`: architecture decision records for choices that should not
+  be rediscovered by each new agent.

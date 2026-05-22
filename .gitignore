@@ -8,3 +8,6 @@ dist/
 npm-debug.log*
 /.idea/
 /.vscode/
+.antigravitycli
+/handoff.html
+
