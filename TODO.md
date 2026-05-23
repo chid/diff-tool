@@ -45,6 +45,11 @@ large new product surfaces.
 - [x] Preferences system with JSON-driven registry, SettingsContext, SettingsPanel (25 settings, 45 tests).
 - [x] Settings panel UI with category icons, modified badges, focus trap, animations.
 - [ ] TODO: Wire live Tauri IPC so the desktop app calls real Rust backends instead of mock data.
+      See [docs/tauri-ipc-wiring-plan.md](docs/tauri-ipc-wiring-plan.md) for the phased plan.
+- [ ] Phase 1: Add `read_file_text` Tauri command, wire diff content with loading/error states.
+- [ ] Phase 2: Wire `scan_tree` for live file tree entries.
+- [ ] Phase 3: File open dialogs, drag and drop, command-line args.
+- [ ] Phase 4: Decision on Rust-format vs. pierre-format diff output.
 - [ ] TODO: Update Rust diff-cli to output `FileDiffMetadata`-compatible JSON directly, eliminating the TypeScript `parseDiffFromFile` converter layer.
 
 ## P4: Merge, Image, And Advanced Diff Modes
@@ -64,9 +69,54 @@ large new product surfaces.
 - [ ] Add evidence-linked summaries only after deterministic source anchors are
       available.
 
+## P6: AI Features (BYOK / OpenAI-Anthropic Compat)
+
+The architecture is defined in [ADR 0002](docs/decisions/0002-ai-features-byok.md).
+The full ideation catalog is in [docs/ai-features.md](docs/ai-features.md).
+
+### Phase 1: Backend Foundation
+
+- [ ] Create `crates/ai-adapter/` with `LlmBackend` trait.
+- [ ] Implement `OpenAiBackend` and `AnthropicBackend`.
+- [ ] Add `keyring` crate for OS keychain API key storage.
+- [ ] Add cache implementation with hash-keyed file storage.
+- [ ] Add settings UI for AI provider, model, and key.
+
+### Phase 2: AI Change Summary (P0)
+
+- [ ] Add `ai_summarize_diff` Tauri command with streaming.
+- [ ] Add `<AiSummaryPanel>` React component.
+- [ ] Add `dt explain` CLI command.
+
+### Phase 3: AI-Assisted Merge Conflict Resolution (P0)
+
+- [ ] Ensure `diff-core` parses conflict markers into structured hunks.
+- [ ] Add `ai_resolve_conflict` Tauri command.
+- [ ] Add merge resolution UI with accept/reject per hunk.
+- [ ] Add build/lint validation after AI resolution.
+
+### Phase 4: Risk Scoring, Intent Clustering, Triage Ranking (P1)
+
+- [ ] Add risk scoring prompt and Tauri command.
+- [ ] Add intent clustering prompt and Tauri command.
+- [ ] Add triage ranking combining deterministic + AI signals.
+- [ ] Add risk badges to file tree, cluster view toggle.
+
+### Phase 5: Explain Hunk, Review Questions, Commit Messages (P2)
+
+- [ ] Add explain-hunk context menu in diff pane.
+- [ ] Add review-questions accordion below diff summary.
+- [ ] Add `dt commit-msg` CLI command.
+
+### Phase 6: Agent-Review Workspace (P2)
+
+- [ ] Add diff-of-diffs computation in Rust.
+- [ ] Add 3-panel agent comparison view.
+- [ ] Add divergence explanation prompt.
+
 ## Documentation Debt
 
+- [x] Add an ADR when choosing the AI feature strategy (BYOK / API compat).
 - [ ] Add an ADR when choosing the final UI renderer strategy.
-- [ ] Add an ADR when choosing the final diff algorithm strategy.
 - [ ] Add Windows setup notes after validating Tauri and CLI on Windows.
 - [ ] Add release packaging docs once bundle assets and signing are real.

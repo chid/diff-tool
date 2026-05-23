@@ -21,6 +21,14 @@ the core diff, filesystem, Git, merge, and image work in Rust.
    stable IPC contract.
 4. Test corpus and performance: import open fixtures, add golden tests, and
    benchmark against large repositories.
+5. AI features: optional BYOK enrichment layer using OpenAI/Anthropic-compatible
+   backends for change summaries, merge resolution, risk scoring, intent
+   clustering, review questions, commit messages, and agent-review workspaces.
+   AI is purely additive — the tool is fully functional without it.
+
+See [ADR 0002](docs/decisions/0002-ai-features-byok.md) for the architecture
+decision and [docs/ai-features.md](docs/ai-features.md) for the full ideation
+catalog.
 
 ## Exit Criteria For Phase 1
 

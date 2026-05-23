@@ -38,3 +38,15 @@ behavior.
 Own `fixtures`, `scripts`, and `benches`. Import license-compatible fixtures
 from Git, GNU diffutils, libgit2, diff-match-patch/dissimilar, and tree-sitter
 tests. Add large-repo benchmarks for Rust, CPython, LLVM, and Linux checkouts.
+
+## Agent G: AI Features
+
+Own `crates/ai-adapter` and the AI enrichment layer across CLI and desktop.
+Implement the `LlmBackend` trait with OpenAI/Anthropic-compatible backends, API
+key management via OS keychain, and hash-keyed result caching. Build prompt
+templates for change summaries, merge conflict resolution, risk scoring, intent
+clustering, review questions, commit messages, explain-hunk, and agent-review
+workspace. Every AI feature must have a clear offline/disabled fallback.
+
+See [ADR 0002](docs/decisions/0002-ai-features-byok.md) and
+[docs/ai-features.md](docs/ai-features.md).
