@@ -64,16 +64,26 @@ Implemented:
 - Initial diff JSON model and `dt diff` CLI.
 - Basic folder scan model and `dt dir` CLI.
 - Tauri command bridge for file compare and tree scan.
-- Desktop mock workbench with changed-file list and split diff view.
+- **`@pierre/diffs` integration** — `FileDiff` renders in split view with
+  Shiki syntax highlighting preloaded via `main.tsx`.
+- **`@pierre/trees` integration** — `FileTree` web component renders the
+  changed-file list with Git status badges and selection callbacks.
+- **Preferences system** — JSON-driven settings registry (`settings-registry.json`),
+  `SettingsContext` with localStorage persistence, and an elegant `SettingsPanel`
+  modal with category icons, modified-count badges, focus trap, and animations.
+  Covers 25 settings across 5 categories: Display, Algorithm, Performance,
+  Interaction, File Display.
+- **Unit tests** — 45 vitest tests (SettingsContext + SettingsPanel) using
+  `@testing-library/react` and `jsdom`.
 - Fixture cases, CLI tests, adapter tests, examples, and performance runner.
 
 Not implemented yet:
 
 - Multi-hunk/context-aware diff output.
+- Live Tauri bridge wiring (desktop currently runs mock data in Vite dev mode).
 - Real Git status, commit comparison, blame, or conflict discovery.
 - Real folder comparison between left/right trees.
 - Merge resolution.
-- Pierre component integration in the live UI.
 - Image/table/archive comparison.
 
 See [TODO.md](TODO.md) for the prioritized backlog.
@@ -83,6 +93,7 @@ See [TODO.md](TODO.md) for the prioritized backlog.
 - [Architecture](docs/architecture.md)
 - [Development Guide](docs/development.md)
 - [Testing and Performance](docs/testing-and-performance.md)
+- [End-To-End Integration Test Process](docs/e2e-integration-test-process.md)
 - [Implementation Plan](docs/implementation-plan.md)
 - [Agent Work Packages](docs/agent-work-packages.md)
 - [Contributing](CONTRIBUTING.md)

@@ -41,5 +41,7 @@ Use the root docs as the canonical handoff surface:
 - `docs/development.md`: developer setup and common implementation workflows.
 - `docs/testing-and-performance.md`: test commands, fixture rules, and perf
   runner behavior.
+- `docs/e2e-integration-test-process.md`: process scaffold for the first
+  end-to-end integration test before full instrumentation is added.
 - `docs/decisions/`: architecture decision records for choices that should not
   be rediscovered by each new agent.

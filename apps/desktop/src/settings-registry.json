@@ -1,0 +1,236 @@
+{
+  "categories": [
+    { "key": "display",      "label": "Display",         "description": "Visual layout and appearance" },
+    { "key": "algorithm",    "label": "Diff Algorithm",   "description": "How diffs are computed and shown" },
+    { "key": "performance",  "label": "Performance",      "description": "Worker threads and rendering budgets" },
+    { "key": "interaction",  "label": "Interaction",      "description": "Hover, selection, and click behavior" },
+    { "key": "file",         "label": "File Display",     "description": "Headers, line numbers, and backgrounds" }
+  ],
+
+  "settings": [
+    {
+      "key": "diffStyle",
+      "label": "Diff style",
+      "description": "Side-by-side or unified view",
+      "category": "display",
+      "control": "select",
+      "default": "split",
+      "options": [
+        { "label": "Split",   "value": "split" },
+        { "label": "Unified", "value": "unified" }
+      ]
+    },
+    {
+      "key": "theme",
+      "label": "Theme",
+      "description": "Syntax highlighting color theme",
+      "category": "display",
+      "control": "select",
+      "default": "pierre-dark",
+      "options": [
+        { "label": "Dark",       "value": "pierre-dark" },
+        { "label": "Dark Soft",  "value": "pierre-dark-soft" },
+        { "label": "Light",      "value": "pierre-light" },
+        { "label": "Light Soft", "value": "pierre-light-soft" }
+      ]
+    },
+    {
+      "key": "themeType",
+      "label": "Theme mode",
+      "description": "Follow system or force light/dark",
+      "category": "display",
+      "control": "select",
+      "default": "system",
+      "options": [
+        { "label": "System", "value": "system" },
+        { "label": "Light",  "value": "light" },
+        { "label": "Dark",   "value": "dark" }
+      ]
+    },
+    {
+      "key": "overflow",
+      "label": "Line overflow",
+      "description": "Scroll horizontally or wrap lines",
+      "category": "display",
+      "control": "select",
+      "default": "scroll",
+      "options": [
+        { "label": "Scroll", "value": "scroll" },
+        { "label": "Wrap",   "value": "wrap" }
+      ]
+    },
+
+    {
+      "key": "diffIndicators",
+      "label": "Change indicators",
+      "description": "Visual markers for changed lines",
+      "category": "algorithm",
+      "control": "select",
+      "default": "classic",
+      "options": [
+        { "label": "Classic", "value": "classic" },
+        { "label": "Bars",    "value": "bars" },
+        { "label": "None",    "value": "none" }
+      ]
+    },
+    {
+      "key": "hunkSeparators",
+      "label": "Hunk separators",
+      "description": "How hunk boundaries are displayed",
+      "category": "algorithm",
+      "control": "select",
+      "default": "line-info-basic",
+      "options": [
+        { "label": "Line info (basic)", "value": "line-info-basic" },
+        { "label": "Line info",         "value": "line-info" },
+        { "label": "Metadata",          "value": "metadata" },
+        { "label": "Simple",            "value": "simple" }
+      ]
+    },
+    {
+      "key": "lineDiffType",
+      "label": "Inline diff",
+      "description": "Word/character-level change highlighting within lines",
+      "category": "algorithm",
+      "control": "select",
+      "default": "none",
+      "options": [
+        { "label": "None",          "value": "none" },
+        { "label": "Word",          "value": "word" },
+        { "label": "Word (alt)",    "value": "word-alt" },
+        { "label": "Character",     "value": "char" }
+      ]
+    },
+    {
+      "key": "expandUnchanged",
+      "label": "Expand all context",
+      "description": "Show all unchanged lines (no folding)",
+      "category": "algorithm",
+      "control": "toggle",
+      "default": false
+    },
+    {
+      "key": "collapsedContextThreshold",
+      "label": "Context threshold",
+      "description": "Context lines before collapsing hunks",
+      "category": "algorithm",
+      "control": "number",
+      "default": 3,
+      "min": 0,
+      "max": 25
+    },
+    {
+      "key": "expansionLineCount",
+      "label": "Expand lines",
+      "description": "Lines to expand when unfolding a hunk",
+      "category": "algorithm",
+      "control": "number",
+      "default": 20,
+      "min": 5,
+      "max": 200
+    },
+
+    {
+      "key": "disableWorkerPool",
+      "label": "Disable Web Workers",
+      "description": "Run highlighting on the main thread (simpler but may block UI on large files)",
+      "category": "performance",
+      "control": "toggle",
+      "default": true
+    },
+    {
+      "key": "preferredHighlighter",
+      "label": "Highlighter engine",
+      "description": "WASM is faster but heavier; JS is lighter",
+      "category": "performance",
+      "control": "select",
+      "default": "shiki-wasm",
+      "options": [
+        { "label": "WASM",        "value": "shiki-wasm" },
+        { "label": "JavaScript",  "value": "shiki-js" }
+      ]
+    },
+    {
+      "key": "disableVirtualizationBuffers",
+      "label": "Disable virtual scrolling",
+      "description": "Render all lines (slower on large files)",
+      "category": "performance",
+      "control": "toggle",
+      "default": false
+    },
+    {
+      "key": "tokenizeMaxLineLength",
+      "label": "Max line highlight length",
+      "description": "Characters per line to syntax-highlight (0 = unlimited)",
+      "category": "performance",
+      "control": "number",
+      "default": 5000,
+      "min": 0,
+      "max": 20000
+    },
+
+    {
+      "key": "lineHoverHighlight",
+      "label": "Line hover highlight",
+      "description": "Highlight lines on mouse hover",
+      "category": "interaction",
+      "control": "select",
+      "default": "both",
+      "options": [
+        { "label": "Both",         "value": "both" },
+        { "label": "Number only",  "value": "number" },
+        { "label": "Line only",    "value": "line" },
+        { "label": "Disabled",     "value": "disabled" }
+      ]
+    },
+    {
+      "key": "enableLineSelection",
+      "label": "Line selection",
+      "description": "Click and drag to select line ranges",
+      "category": "interaction",
+      "control": "toggle",
+      "default": true
+    },
+    {
+      "key": "stickyHeader",
+      "label": "Sticky header",
+      "description": "Keep the file header visible while scrolling",
+      "category": "interaction",
+      "control": "toggle",
+      "default": true
+    },
+    {
+      "key": "enableTokenInteractionsOnWhitespace",
+      "label": "Whitespace tokens",
+      "description": "Detect clicks/hovers on whitespace tokens",
+      "category": "interaction",
+      "control": "toggle",
+      "default": false
+    },
+
+    {
+      "key": "disableLineNumbers",
+      "label": "Hide line numbers",
+      "description": "Remove the line number gutter",
+      "category": "file",
+      "control": "toggle",
+      "default": false
+    },
+    {
+      "key": "disableFileHeader",
+      "label": "Hide file header",
+      "description": "Remove the file name and stats bar",
+      "category": "file",
+      "control": "toggle",
+      "default": false
+    },
+    {
+      "key": "disableBackground",
+      "label": "Hide diff background",
+      "description": "Remove the red/green background tints",
+      "category": "file",
+      "control": "toggle",
+      "default": false
+    }
+  ]
+}
