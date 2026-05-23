@@ -76,15 +76,15 @@ Current commands:
 
 Current UI:
 
-- mock changed-file tree
-- fallback split diff pane
-- Tauri command helpers
+- Pierre-backed diff and tree wrappers (live in `integrate-pierre-libs`).
+- JSON-driven preferences system with 25 settings and 45 tests.
+- Mock data fallback for Vite dev mode (no Rust backend).
 
 Target UI:
 
-- Pierre-backed diff and tree wrappers after the Phase 1 spike
-- fallback renderers retained for testability and packaging risk
-- typed IPC boundary between React and Rust
+- Live Tauri IPC wiring — see [Tauri IPC Wiring Plan](tauri-ipc-wiring-plan.md).
+- Fallback renderers retained for testability and packaging risk.
+- Typed IPC boundary between React and Rust.
 
 ## Data Flow
 

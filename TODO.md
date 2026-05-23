@@ -44,10 +44,10 @@ large new product surfaces.
 - [x] Replace fallback tree pane with a wrapped `@pierre/trees` spike.
 - [x] Preferences system with JSON-driven registry, SettingsContext, SettingsPanel (25 settings, 45 tests).
 - [x] Settings panel UI with category icons, modified badges, focus trap, animations.
-- [ ] TODO: Wire live Tauri IPC so the desktop app calls real Rust backends instead of mock data.
+- [x] TODO: Wire live Tauri IPC so the desktop app calls real Rust backends instead of mock data.
       See [docs/tauri-ipc-wiring-plan.md](docs/tauri-ipc-wiring-plan.md) for the phased plan.
-- [ ] Phase 1: Add `read_file_text` Tauri command, wire diff content with loading/error states.
-- [ ] Phase 2: Wire `scan_tree` for live file tree entries.
+- [x] Phase 1: Add `read_file_text` Tauri command, wire diff content with loading/error states.
+- [x] Phase 2: Wire `scan_tree` for live file tree entries.
 - [ ] Phase 3: File open dialogs, drag and drop, command-line args.
 - [ ] Phase 4: Decision on Rust-format vs. pierre-format diff output.
 - [ ] TODO: Update Rust diff-cli to output `FileDiffMetadata`-compatible JSON directly, eliminating the TypeScript `parseDiffFromFile` converter layer.

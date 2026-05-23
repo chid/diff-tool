@@ -1,20 +1,27 @@
 import { useState, useMemo } from 'react';
 import { GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare } from 'lucide-react';
-import { parseDiffFromFile } from '@pierre/diffs';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsProvider, useSettings } from './components/SettingsContext';
-import { sampleOldFile, sampleNewFile, sampleTree, sampleStats } from './sampleData';
+import { useFileDiffLoader } from './useFileDiffLoader';
+import { useTreeLoader } from './useTreeLoader';
 
 function AppInner() {
   const [activePath, setActivePath] = useState<string | undefined>('src/App.tsx');
   const { settings, updateSetting } = useSettings();
 
+  const { state: loadState, retry } = useFileDiffLoader();
+
   const fileDiff = useMemo(
-    () => parseDiffFromFile(sampleOldFile, sampleNewFile),
-    [],
+    () => (loadState.phase === 'loaded' ? loadState.fileDiff : null),
+    [loadState],
   );
+
+  // Real stats come from Rust compare_files in a later phase.
+  // For now the toolbar subtitle is hidden until stats are wired.
+
+  const treeEntries = useTreeLoader();
 
   const handleTreeSelect = (path: string) => {
     setActivePath(path);
@@ -34,7 +41,7 @@ function AppInner() {
           <button><TerminalSquare size={16} /> CLI</button>
         </nav>
         <FileTreePane
-          entries={sampleTree}
+          entries={treeEntries}
           activePath={activePath}
           onSelect={handleTreeSelect}
         />
@@ -43,7 +50,6 @@ function AppInner() {
         <header className="toolbar">
           <div>
             <h1>Working Tree</h1>
-            <p>{sampleStats.additions} additions, {sampleStats.deletions} deletions</p>
           </div>
           <div className="toolbar-actions">
             <button
@@ -61,7 +67,11 @@ function AppInner() {
             <SettingsPanel />
           </div>
         </header>
-        <DiffPane fileDiff={fileDiff} />
+        <DiffPane
+          fileDiff={fileDiff}
+          loadState={loadState}
+          onRetry={retry}
+        />
       </section>
     </main>
   );

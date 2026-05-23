@@ -1,3 +1,12 @@
+import type { FileDiffMetadata } from '@pierre/diffs';
+
+/** Discriminated union for async file-diff loading state. */
+export type LoadState =
+  | { phase: 'idle' }
+  | { phase: 'loading' }
+  | { phase: 'loaded'; fileDiff: FileDiffMetadata }
+  | { phase: 'error'; message: string };
+
 export type ChangeKind = 'context' | 'addition' | 'deletion';
 
 export interface IntraSpan {

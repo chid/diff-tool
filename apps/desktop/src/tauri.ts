@@ -8,3 +8,11 @@ export async function compareFiles(left: string, right: string): Promise<DiffRes
 export async function scanTree(root: string): Promise<DirEntryDiff[]> {
   return invoke<DirEntryDiff[]>('scan_tree', { root });
 }
+
+/** Read raw file contents from disk via Tauri IPC. */
+export async function readFileText(
+  path: string,
+  maxBytes?: number
+): Promise<string> {
+  return invoke<string>('read_file_text', { path, maxBytes });
+}
