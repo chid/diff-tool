@@ -177,6 +177,58 @@ select {
   font-size: 20px;
 }
 
+.toolbar-file-picker {
+  display: flex;
+  gap: 10px;
+}
+
+.toolbar-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #384047;
+  border-radius: 6px;
+  background: #1a1f23;
+  color: #88939e;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.toolbar-open-btn:hover {
+  border-color: #4da3ff;
+  color: #c7d0d8;
+  background: #1e262d;
+}
+
+.toolbar-open-label {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-stats {
+  display: flex;
+  gap: 14px;
+}
+
+.toolbar-stat {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolbar-stat-add {
+  color: #67d391;
+}
+
+.toolbar-stat-del {
+  color: #ff7a85;
+}
+
 .toolbar p {
   margin: 0;
   color: #aeb8c1;
@@ -339,6 +391,137 @@ select {
 .marker {
   text-align: center;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Intraline span highlights
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.intra-highlight {
+  border-radius: 3px;
+  padding: 0 1px;
+  font-weight: 700;
+}
+
+/* Unified view */
+.diff-line.addition .intra-highlight {
+  background: rgba(38, 167, 106, 0.32);
+  color: #67d391;
+}
+
+.diff-line.deletion .intra-highlight {
+  background: rgba(235, 83, 91, 0.32);
+  color: #ff7a85;
+}
+
+.diff-line.context .intra-highlight {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Split view */
+.split-pane-col.addition .intra-highlight {
+  background: rgba(38, 167, 106, 0.32);
+  color: #67d391;
+}
+
+.split-pane-col.deletion .intra-highlight {
+  background: rgba(235, 83, 91, 0.32);
+  color: #ff7a85;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Hunk headers & separators
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.hunk-group,
+.hunk-group-split {
+  margin-bottom: 4px;
+}
+
+.hunk-header {
+  padding: 4px 14px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  color: #6b7680;
+  background: #141719;
+  border-top: 1px solid #252a2e;
+  border-bottom: 1px solid #252a2e;
+  user-select: none;
+}
+
+.hunk-separator {
+  padding: 4px 14px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  color: #4b5660;
+  background: #141719;
+  text-align: center;
+  user-select: none;
+  letter-spacing: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Split diff view
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.split-file-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.split-header {
+  grid-column: 1 / -1;
+}
+
+.split-separator {
+  grid-column: 1 / -1;
+}
+
+.diff-line-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 20px;
+}
+
+.diff-line-split.addition {
+  background: transparent;
+}
+
+.diff-line-split.deletion {
+  background: transparent;
+}
+
+.split-pane-col {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  min-height: 20px;
+  overflow: hidden;
+}
+
+.split-pane-col.addition {
+  background: rgba(38, 167, 106, 0.14);
+}
+
+.split-pane-col.deletion {
+  background: rgba(235, 83, 91, 0.14);
+}
+
+.split-pane-col.empty-pane {
+  opacity: 0.4;
+}
+
+.split-pane-col .line-no {
+  text-align: right;
+  padding: 0 8px;
+  user-select: none;
+  color: #81909b;
+}
+
+.split-pane-col code {
+  overflow: hidden;
+  white-space: pre;
+  padding-right: 12px;
+}
+
 
 .diff-line code {
   overflow: hidden;
@@ -816,6 +999,174 @@ select {
    Responsive
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Browser Test Harness
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.browser-test-harness {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #111314;
+}
+
+.harness-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #181b1d;
+  border-bottom: 1px solid #30363a;
+}
+
+.harness-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #eef1f3;
+}
+
+.harness-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.harness-nav button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid #384047;
+  border-radius: 6px;
+  background: #202528;
+  color: #d8dee3;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.harness-nav button:hover {
+  border-color: #4da3ff;
+}
+
+.harness-counter {
+  font-size: 13px;
+  font-weight: 600;
+  color: #88939e;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.harness-case-info {
+  padding: 16px 20px 8px;
+  border-bottom: 1px solid #252a2e;
+  background: #141719;
+}
+
+.harness-case-info h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #eef1f3;
+}
+
+.harness-case-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7680;
+}
+
+.harness-render-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.harness-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: #181b1d;
+  border-top: 1px solid #30363a;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.harness-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #202528;
+  color: #88939e;
+  font-weight: 600;
+}
+
+.harness-badge-warn {
+  background: rgba(255, 180, 50, 0.12);
+  color: #ffb432;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Desktop Render Smoke Test Page
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.smoke-test-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #111314;
+}
+
+.smoke-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #181b1d;
+  border-bottom: 1px solid #30363a;
+}
+
+.smoke-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #eef1f3;
+}
+
+.smoke-header p {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7680;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.smoke-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.smoke-loading {
+  color: var(--color-muted);
+  font-style: italic;
+  padding: 1rem 0;
+}
+
+.smoke-error {
+  color: var(--color-error, #e74c3c);
+  font-weight: 600;
+  padding: 1rem 0;
+}
+
+.smoke-stat {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #88939e;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -886,4 +1237,71 @@ select {
   .setting-control {
     justify-content: flex-start;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tree — Context Menu
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tree-context-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid #384047;
+  border-radius: 10px;
+  background: #1a1f24;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.tree-context-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c7d0d8;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tree-context-item:hover {
+  background: #29323b;
+  color: #f1f4f6;
+}
+
+.tree-context-item.active {
+  background: #152d42;
+  color: #4da3ff;
+}
+
+.tree-context-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  color: #6b7680;
+  flex-shrink: 0;
+}
+
+.tree-context-item.active .tree-context-icon {
+  color: #4da3ff;
+}
+
+.tree-context-check {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #67d391;
 }

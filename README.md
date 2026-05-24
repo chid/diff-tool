@@ -91,6 +91,7 @@ See [TODO.md](TODO.md) for the prioritized backlog.
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Design Language](docs/design.md)
 - [Development Guide](docs/development.md)
 - [Testing and Performance](docs/testing-and-performance.md)
 - [End-To-End Integration Test Process](docs/e2e-integration-test-process.md)

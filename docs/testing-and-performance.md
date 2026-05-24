@@ -82,3 +82,31 @@ alternate diff algorithms.
 - Add large-repo optional benchmarks for Rust, CPython, LLVM, and Linux.
 - Add platform-specific memory measurement.
 - Add snapshot tests for CLI human output after output style stabilizes.
+
+## E2E Tests
+
+Node-based E2E tests exercise the CLI from end to end:
+
+```bash
+npm run test:e2e:cli                     # Text diff happy path
+npm run test:e2e:whitespace-ignore       # --ignore-whitespace (zero diffs)
+npm run test:e2e:whitespace-case-ignore  # --ignore-whitespace-and-case (zero diffs)
+npm run test:e2e:folder-scan             # Folder scan happy path
+npm run test:e2e:error-path             # CLI error paths (exit code 2)
+npm run test:e2e:context               # --context flag hunk grouping
+```
+
+Playwright-based E2E tests verify the desktop renderer:
+
+```bash
+npm run test:e2e                         # Browser harness + smoke tests
+npm run test:e2e:cli-smoke              # CLI-backed desktop render smoke test
+```
+
+Each test:
+
+- Builds the `dt` binary from source (`cargo run -p diff-cli`).
+- Runs a known fixture through the CLI.
+- Asserts JSON output shape, exit codes, and expected stats.
+- Writes instrumentation to `target/e2e/*.json`.
+- Exits `0` on pass and non-zero on failure.

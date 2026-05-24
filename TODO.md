@@ -7,14 +7,14 @@ large new product surfaces.
 
 - [ ] Add `npm run test:e2e` using the Markdown process in
       `docs/e2e-integration-test-process.md`.
-- [ ] Replace single full-file hunk output with real hunk generation using the
-      `context` value in `DiffRequest`.
-- [ ] Add intraline spans for adjacent delete/add pairs.
-- [ ] Normalize or explicitly model line endings so CRLF/LF behavior is
+- [x] Make context configurable via `--context` CLI flag (context-aware hunk
+      generation already uses the `context` value in `DiffRequest`).
+- [x] Add intraline spans for adjacent delete/add pairs.
+- [x] Normalize or explicitly model line endings so CRLF/LF behavior is
       intentional and documented.
 - [ ] Add binary detection before lossy UTF-8 conversion.
 - [ ] Add invalid UTF-8 fixtures and tests.
-- [ ] Make `dt diff` exit non-zero for unreadable inputs and invalid arguments
+- [x] Make `dt diff` exit non-zero for unreadable inputs and invalid arguments
       with documented exit codes.
 - [ ] Add stable CLI output snapshots for human and JSON modes.
 

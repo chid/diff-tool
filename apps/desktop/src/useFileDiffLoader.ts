@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseDiffFromFile } from '@pierre/diffs';
-import type { FileContents } from '@pierre/diffs';
-import type { LoadState } from './types';
+import type { FileContents, FileDiffMetadata } from '@pierre/diffs';
+import type { LoadState, DiffResult } from './types';
 import { isTauri } from './tauriDetect';
-import { readFileText } from './tauri';
-import { sampleOldFile, sampleNewFile } from './sampleData';
+import { readFileText, compareFiles } from './tauri';
+import { sampleOldFile, sampleNewFile, sampleStats } from './sampleData';
 
 /**
  * Current demo paths. These will be replaced by file-open dialogs in Phase 3.
@@ -19,14 +19,30 @@ const DEMO_RIGHT = 'TODO.md';
 
 /**
  * Async hook that loads file contents and produces a {@link LoadState}.
- * Re-triggers when `retryKey` changes.
+ *
+ * In Tauri mode:
+ * - Both `leftPath` and `rightPath` provided: loads both files, diffs them,
+ *   and fetches real stats from the Rust compare_files command.
+ * - Only `rightPath` provided: loads the file as all-additions (single-file preview).
+ * - Neither provided: loads the two hardcoded demo files with real Rust stats.
+ *
+ * In Vite dev mode (no Tauri), uses hardcoded sample data regardless of paths.
+ *
+ * Re-triggers when `leftPath`, `rightPath`, or `retryKey` changes.
  */
-export function useFileDiffLoader(): {
+export function useFileDiffLoader(
+  leftPath?: string,
+  rightPath?: string,
+): {
   state: LoadState;
+  stats: { additions: number; deletions: number; unchanged: number };
+  nativeDiff: DiffResult | null;
   retry: () => void;
 } {
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<LoadState>({ phase: 'loading' });
+  const [stats, setStats] = useState({ additions: 0, deletions: 0, unchanged: 0 });
+  const [nativeDiff, setNativeDiff] = useState<DiffResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,22 +51,88 @@ export function useFileDiffLoader(): {
       if (!isTauri) {
         // Vite dev mode — use hardcoded mock data
         const fileDiff = parseDiffFromFile(sampleOldFile, sampleNewFile);
-        if (!cancelled) setState({ phase: 'loaded', fileDiff });
+        if (!cancelled) {
+          setState({ phase: 'loaded', fileDiff });
+          setStats(sampleStats);
+          setNativeDiff(null);
+        }
         return;
       }
 
       setState({ phase: 'loading' });
 
       try {
-        const [leftText, rightText] = await Promise.all([
-          readFileText(DEMO_LEFT),
-          readFileText(DEMO_RIGHT),
-        ]);
-        if (cancelled) return;
+        let fileDiff: FileDiffMetadata;
 
-        const leftFile: FileContents = { name: DEMO_LEFT, contents: leftText };
-        const rightFile: FileContents = { name: DEMO_RIGHT, contents: rightText };
-        const fileDiff = parseDiffFromFile(leftFile, rightFile);
+        if (leftPath && rightPath) {
+          // Two-file comparison from file dialogs
+          const [leftText, rightText] = await Promise.all([
+            readFileText(leftPath),
+            readFileText(rightPath),
+          ]);
+          if (cancelled) return;
+          const leftFile: FileContents = { name: leftPath, contents: leftText };
+          const rightFile: FileContents = { name: rightPath, contents: rightText };
+          fileDiff = parseDiffFromFile(leftFile, rightFile);
+
+          // Fetch real stats from the Rust diff engine
+          try {
+            const rustResult = await compareFiles(leftPath, rightPath);
+            if (!cancelled) {
+              setStats(rustResult.stats);
+              setNativeDiff(rustResult);
+            }
+          } catch (statsErr) {
+            console.warn('compare_files failed, using client-side stats:', statsErr);
+          }
+        } else if (rightPath) {
+          // Load the selected file's content as the "right" (new) side
+          const text = await readFileText(rightPath);
+          if (cancelled) return;
+          const rightFile: FileContents = { name: rightPath, contents: text };
+          // Empty left side — everything renders as additions
+          const leftFile: FileContents = { name: rightPath, contents: '' };
+          fileDiff = parseDiffFromFile(leftFile, rightFile);
+
+          // Single-file preview — no meaningful cross-file stats
+          if (!cancelled) {
+            setStats({ additions: 0, deletions: 0, unchanged: 0 });
+            setNativeDiff(null);
+          }
+        } else if (leftPath) {
+          // Only left path provided — load as all-deletions
+          const text = await readFileText(leftPath);
+          if (cancelled) return;
+          const leftFile: FileContents = { name: leftPath, contents: text };
+          const rightFile: FileContents = { name: leftPath, contents: '' };
+          fileDiff = parseDiffFromFile(leftFile, rightFile);
+          if (!cancelled) {
+            setStats({ additions: 0, deletions: 0, unchanged: 0 });
+            setNativeDiff(null);
+          }
+        } else {
+          // Default: compare two real demo files
+          const [leftText, rightText] = await Promise.all([
+            readFileText(DEMO_LEFT),
+            readFileText(DEMO_RIGHT),
+          ]);
+          if (cancelled) return;
+          const leftFile: FileContents = { name: DEMO_LEFT, contents: leftText };
+          const rightFile: FileContents = { name: DEMO_RIGHT, contents: rightText };
+          fileDiff = parseDiffFromFile(leftFile, rightFile);
+
+          // Fetch real stats from the Rust diff engine for the two demo files
+          try {
+            const rustResult = await compareFiles(DEMO_LEFT, DEMO_RIGHT);
+            if (!cancelled) {
+              setStats(rustResult.stats);
+              setNativeDiff(rustResult);
+            }
+          } catch (statsErr) {
+            console.warn('compare_files failed, using client-side stats:', statsErr);
+          }
+        }
+
         setState({ phase: 'loaded', fileDiff });
       } catch (err) {
         if (!cancelled) {
@@ -64,9 +146,12 @@ export function useFileDiffLoader(): {
 
     load();
     return () => { cancelled = true; };
-  }, [retryKey]);
+  }, [leftPath, rightPath, retryKey]);
 
-  const retry = useCallback(() => setRetryKey((k) => k + 1), []);
+  const retry = useCallback(() => {
+    setNativeDiff(null);
+    setRetryKey((k) => k + 1);
+  }, []);
 
-  return { state, retry };
+  return { state, stats, nativeDiff, retry };
 }

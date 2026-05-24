@@ -33,15 +33,20 @@ fn scan_tree(root: PathBuf) -> Result<Vec<git_adapter::DirEntryDiff>, String> {
 #[tauri::command]
 fn read_file_text(path: PathBuf, max_bytes: Option<u64>) -> Result<String, String> {
     let limit = max_bytes.unwrap_or(DEFAULT_MAX_BYTES) as usize;
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("failed to read {}: {}", path.display(), e))?;
+    let bytes =
+        std::fs::read(&path).map_err(|e| format!("failed to read {}: {}", path.display(), e))?;
     let slice = &bytes[..bytes.len().min(limit)];
     Ok(String::from_utf8_lossy(slice).into_owned())
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![compare_files, scan_tree, read_file_text])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            compare_files,
+            scan_tree,
+            read_file_text
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run app");
 }

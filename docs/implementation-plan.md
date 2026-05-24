@@ -46,6 +46,7 @@ Use the root docs as the canonical handoff surface:
 - `TODO.md`: prioritized backlog and known technical debt.
 - `CONTRIBUTING.md`: contribution workflow and quality bar.
 - `docs/architecture.md`: current system boundaries and data flow.
+- `docs/design.md`: the Editorial Diff visual language and prompt pack.
 - `docs/development.md`: developer setup and common implementation workflows.
 - `docs/testing-and-performance.md`: test commands, fixture rules, and perf
   runner behavior.

@@ -116,11 +116,12 @@ target/e2e/latest.json
 Add scenarios in this order:
 
 1. Text diff happy path.
-2. Whitespace-ignore text diff.
-3. Folder scan happy path.
-4. CLI error path for missing file.
-5. Desktop render smoke test using a static `DiffResult`.
-6. Desktop render test backed by CLI output.
+2. Whitespace-ignore text diff. ✅ (`npm run test:e2e:whitespace-ignore`)
+2b. Whitespace-and-case-ignore text diff. ✅ (`npm run test:e2e:whitespace-case-ignore`)
+3. Folder scan happy path. ✅ (`npm run test:e2e:folder-scan`)
+4. CLI error path for missing file. ✅ (`npm run test:e2e:error-path`)
+5. Desktop render smoke test using a static `DiffResult`. ✅ (`npm run test:e2e` — `desktop_render_smoke.spec.ts`)
+6. Desktop render test backed by CLI output. ✅ (`npm run test:e2e:cli-smoke`)
 7. Merge placeholder behavior.
 8. Real merge behavior once implemented.
 

@@ -12,6 +12,7 @@ diff-core.workspace = true
 git-adapter.workspace = true
 serde.workspace = true
 tauri.workspace = true
+tauri-plugin-dialog = "2.7.1"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

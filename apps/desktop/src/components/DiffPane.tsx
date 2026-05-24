@@ -3,15 +3,17 @@ import type { FileDiffMetadata, FileDiffOptions } from '@pierre/diffs';
 import { Loader2, AlertTriangle, RefreshCw, FileX } from 'lucide-react';
 import { useSettings } from './SettingsContext';
 import { settingsToFileDiffOptions } from '../settingsTypes';
-import type { LoadState } from '../types';
+import { NativeDiffRenderer } from './NativeDiffRenderer';
+import type { LoadState, DiffResult } from '../types';
 
 interface DiffPaneProps {
   fileDiff: FileDiffMetadata | null;
+  nativeDiff: DiffResult | null;
   loadState: LoadState;
   onRetry: () => void;
 }
 
-export function DiffPane({ fileDiff, loadState, onRetry }: DiffPaneProps) {
+export function DiffPane({ fileDiff, nativeDiff, loadState, onRetry }: DiffPaneProps) {
   const { settings } = useSettings();
 
   if (loadState.phase === 'loading') {
@@ -54,13 +56,19 @@ export function DiffPane({ fileDiff, loadState, onRetry }: DiffPaneProps) {
   }
 
   return (
-    <article className="diff-pane" aria-label="Text diff">
-      <FileDiff
-        fileDiff={fileDiff}
-        disableWorkerPool={settings.disableWorkerPool}
-        options={settingsToFileDiffOptions(settings) as FileDiffOptions<undefined>}
-        style={{ minHeight: 0, flex: '1 1 auto' }}
-      />
-    </article>
+    <>
+      {nativeDiff ? (
+        <NativeDiffRenderer diff={nativeDiff} />
+      ) : (
+        <article className="diff-pane" aria-label="Text diff">
+          <FileDiff
+            fileDiff={fileDiff!}
+            disableWorkerPool={settings.disableWorkerPool}
+            options={settingsToFileDiffOptions(settings) as FileDiffOptions<undefined>}
+            style={{ minHeight: 0, flex: '1 1 auto' }}
+          />
+        </article>
+      )}
+    </>
   );
 }

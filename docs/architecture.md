@@ -37,13 +37,14 @@ Current responsibilities:
 - `LineChange`
 - ignore modes
 - basic file comparison
+- line-ending normalization (CRLF → LF, documented policy)
 
 Planned responsibilities:
 
 - multi-hunk output
 - intraline spans
 - binary detection
-- encoding and line-ending policy
+- encoding policy
 - merge model support shared by CLI and desktop
 
 ### `git-adapter`
