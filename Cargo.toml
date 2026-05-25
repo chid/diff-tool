@@ -4,6 +4,7 @@ members = [
   "crates/diff-core",
   "crates/git-adapter",
   "crates/diff-cli",
+  "crates/office-adapter",
   "apps/desktop/src-tauri"
 ]
 
@@ -16,6 +17,7 @@ version = "0.1.0"
 clap = { version = "4", features = ["derive"] }
 diff-core = { path = "crates/diff-core" }
 git-adapter = { path = "crates/git-adapter" }
+office-adapter = { path = "crates/office-adapter" }
 ignore = "0.4"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }

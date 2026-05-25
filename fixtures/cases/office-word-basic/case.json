@@ -1,0 +1,12 @@
+{
+  "name": "office word basic paragraph replacement",
+  "format": "word",
+  "expected": {
+    "sections_total": 1,
+    "sections_added": 0,
+    "sections_deleted": 0,
+    "sections_changed": 1,
+    "sections_unchanged": 0,
+    "total_atomic_changes": 1
+  }
+}

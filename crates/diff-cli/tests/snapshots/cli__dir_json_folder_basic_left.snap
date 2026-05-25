@@ -1,0 +1,30 @@
+---
+source: crates/diff-cli/tests/cli.rs
+expression: stdout
+---
+[
+  {
+    "path": "README.md",
+    "status": "unchanged",
+    "size": 12,
+    "mtime": 1779478842,
+    "hash": null,
+    "children": []
+  },
+  {
+    "path": "src",
+    "status": "directory",
+    "size": null,
+    "mtime": 1779478842,
+    "hash": null,
+    "children": []
+  },
+  {
+    "path": "src/app.rs",
+    "status": "unchanged",
+    "size": 36,
+    "mtime": 1779478842,
+    "hash": null,
+    "children": []
+  }
+]

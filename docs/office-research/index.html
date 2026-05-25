@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Document Diffing — Research & Approach Comparison</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --text: #e1e4ed;
+    --text2: #9ca3b8;
+    --accent: #60a5fa;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --border: #2e3240;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: 0.25rem; }
+  h2 { font-size: 1.5rem; color: var(--text); margin: 2.5rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.15rem; color: var(--text); margin: 1.25rem 0 0.5rem; }
+  .subtitle { color: var(--text2); font-size: 0.95rem; margin-bottom: 2rem; }
+  p { margin-bottom: 1rem; color: var(--text2); }
+  code {
+    background: var(--surface2);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--purple);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+  pre code { background: none; padding: 0; color: var(--text); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  td { color: var(--text2); }
+
+  /* Approach cards */
+  .approach-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin: 1.25rem 0 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+  }
+  .card h4 {
+    font-size: 1.05rem;
+    margin-bottom: 0.4rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .card .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15em 0.5em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-green { background: rgba(74,222,128,0.15); color: var(--green); }
+  .badge-amber { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .badge-blue { background: rgba(96,165,250,0.15); color: var(--accent); }
+
+  .card p { font-size: 0.88rem; margin-bottom: 0.6rem; }
+  .card ul { font-size: 0.85rem; color: var(--text2); padding-left: 1.2rem; margin-bottom: 0.75rem; }
+  .card ul li { margin-bottom: 0.25rem; }
+
+  /* Status icons */
+  .check { color: var(--green); }
+  .cross { color: var(--red); }
+  .warn { color: var(--amber); }
+
+  /* Edge case matrix */
+  .ec-table td:first-child { font-weight: 500; color: var(--text); white-space: nowrap; }
+  .ec-table td:not(:first-child) { text-align: center; }
+
+  /* Verdict box */
+  .verdict {
+    background: rgba(96,165,250,0.08);
+    border: 1px solid rgba(96,165,250,0.25);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin: 2rem 0;
+  }
+  .verdict h3 { margin-top: 0; color: var(--accent); }
+  .verdict p { margin-bottom: 0.5rem; }
+
+  /* File path indicators */
+  .path {
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: var(--text2);
+    background: var(--surface2);
+    padding: 0.2em 0.45em;
+    border-radius: 3px;
+  }
+
+  /* TOC */
+  .toc { list-style: none; margin: 0.5rem 0 2rem; }
+  .toc li { margin-bottom: 0.3rem; }
+  .toc a { color: var(--accent); text-decoration: none; font-size: 0.92rem; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Office Document Diffing</h1>
+<p class="subtitle">Research, approach comparison, and implementation learnings — May 2025</p>
+
+<ul class="toc">
+  <li><a href="#background">1. Background: What Makes Office Diffing Hard</a></li>
+  <li><a href="#xml-structure">2. OOXML Structure in 60 Seconds</a></li>
+  <li><a href="#approaches">3. Three Diff Approaches</a></li>
+  <li><a href="#edge-cases">4. Edge Case Matrix</a></li>
+  <li><a href="#verdict">5. Verdict & Recommendation</a></li>
+  <li><a href="#architecture">6. Implementation Architecture</a></li>
+  <li><a href="#test-infra">7. Test & Fixture Infrastructure</a></li>
+  <li><a href="#learnings">8. Key Learnings</a></li>
+  <li><a href="#next-steps">9. Next Steps</a></li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="background">1. What Makes Office Diffing Hard</h2>
+
+<p>A <code>.docx</code> file isn't a document — it's a ZIP archive of XML files. A single visible change like "make this word bold" can touch 3+ XML elements across the content model, run properties, and style definitions. This makes diffing fundamentally different from plain text.</p>
+
+<p>Key challenges identified through research and implementation:</p>
+<table>
+  <tr><th>Challenge</th><th>Why It's Hard</th></tr>
+  <tr><td>Formatting vs content</td><td>Bold→Normal changes no visible text — must diff XML properties, not just extracted text</td></tr>
+  <tr><td>Tracked changes</td><td><code>&lt;w:ins&gt;</code> / <code>&lt;w:del&gt;</code> tags from prior editing create ghost content</td></tr>
+  <tr><td>Nested runs</td><td>One paragraph can have 10+ <code>&lt;w:r&gt;</code> elements — diffing at paragraph level is too coarse</td></tr>
+  <tr><td>Tables</td><td>Cells contain full paragraphs — structure and content are entangled</td></tr>
+  <tr><td>Comments</td><td>Stored in separate <code>comments.xml</code>, linked via IDs — must be diffed separately</td></tr>
+  <tr><td>Floating point (Excel)</td><td><code>1.2</code> stored as <code>1.200000000000001</code> triggers false diffs</td></tr>
+  <tr><td>Attribute ordering</td><td>XML attributes reordered = semantically identical, textually different</td></tr>
+  <tr><td>Embedded media</td><td>Nested ZIPs inside the ZIP — want hash-compare, not text-compare</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="xml-structure">2. OOXML Structure in 60 Seconds</h2>
+
+<p>Every <code>.docx</code> is a ZIP with this structure:</p>
+<pre><code>archive.zip/
+├── [Content_Types].xml          ← MIME types for each part
+├── _rels/.rels                  ← Package-level relationships
+└── word/
+    ├── document.xml             ← THE main content
+    ├── styles.xml               ← Style definitions
+    ├── comments.xml             ← Comments (linked by ID)
+    └── media/                   ← Embedded images/video</code></pre>
+
+<p>Inside <code>word/document.xml</code>, content lives in a deeply nested hierarchy:</p>
+<pre><code>&lt;w:document&gt;
+  &lt;w:body&gt;
+    &lt;w:p&gt;                          ← Paragraph
+      &lt;w:r&gt;                        ← Run (text span with uniform formatting)
+        &lt;w:rPr&gt;&lt;w:b/&gt;&lt;/w:rPr&gt;    ← Run properties (bold)
+        &lt;w:t&gt;Bold intro&lt;/w:t&gt;     ← Actual text
+      &lt;/w:r&gt;
+      &lt;w:r&gt;
+        &lt;w:t&gt; then normal.&lt;/w:t&gt;   ← Another text span
+      &lt;/w:r&gt;
+    &lt;/w:p&gt;
+    &lt;w:tbl&gt;                        ← Table
+      &lt;w:tr&gt;                       ← Row
+        &lt;w:tc&gt;&lt;w:p&gt;...&lt;/w:p&gt;&lt;/w:tc&gt; ← Cell (contains full paragraph!)
+      &lt;/w:tr&gt;
+    &lt;/w:tbl&gt;
+  &lt;/w:body&gt;
+&lt;/w:document&gt;</code></pre>
+
+<p><strong>Key insight:</strong> Every formatting change forces a new <code>&lt;w:r&gt;</code> (run). A single sentence can span multiple runs. This is why diffing at the paragraph level is insufficient — you must understand the run structure.</p>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="approaches">3. Three Diff Approaches</h2>
+
+<p>We researched and implemented <strong>all three</strong> approaches in Rust. Each produces runnable diff output from real <code>.docx</code> files.</p>
+
+<div class="approach-grid">
+
+  <!-- Approach 1 -->
+  <div class="card">
+    <h4>📝 Approach 1: Convert-to-Text <span class="badge badge-green">Simple</span></h4>
+    <p class="path">word/extract.rs :: extract_text()</p>
+    <p>Walk XML tree, collect all <code>&lt;w:t&gt;</code> text, flatten paragraphs to newline-separated lines, feed into <code>diff-core</code>.</p>
+    <ul>
+      <li><span class="check">✓</span> ~50 lines of code</li>
+      <li><span class="check">✓</span> Reuses battle-tested diff-core engine</li>
+      <li><span class="check">✓</span> Single XML pass — fast</li>
+      <li><span class="cross">✗</span> Formatting changes invisible</li>
+      <li><span class="cross">✗</span> Lost structure (tables, headings)</li>
+      <li><span class="cross">✗</span> Tracked changes show as content</li>
+    </ul>
+    <p><strong>Best for:</strong> Quick "what text changed?" preview, git integration</p>
+  </div>
+
+  <!-- Approach 2 -->
+  <div class="card">
+    <h4>🌲 Approach 2: XML Tree Diff <span class="badge badge-amber">Medium</span></h4>
+    <p class="path">word/xml_diff.rs :: compare_xml_trees()</p>
+    <p>Flatten both XML files into event streams, walk in lockstep, report every structural difference.</p>
+    <ul>
+      <li><span class="check">✓</span> Full XML visibility — nothing missed</li>
+      <li><span class="check">✓</span> Formatting changes detected</li>
+      <li><span class="check">✓</span> Works for any OOXML part file</li>
+      <li><span class="warn">⚠</span> Over-sensitive (attribute reordering = false diff)</li>
+      <li><span class="warn">⚠</span> Hard to present to users (paths like <code>/w:document/w:body/w:p[3]/w:r[1]/w:t[1]</code>)</li>
+      <li><span class="cross">✗</span> No semantic grouping — text + formatting = 2 diffs</li>
+    </ul>
+    <p><strong>Best for:</strong> Debugging the semantic parser, validating XML generators</p>
+  </div>
+
+  <!-- Approach 3 -->
+  <div class="card">
+    <h4>🧠 Approach 3: Semantic Model <span class="badge badge-blue">Recommended</span></h4>
+    <p class="path">word/compare.rs :: compare_documents()</p>
+    <p>Parse XML into structured <code>WordDocument</code> model with paragraphs, tables, styles, heading levels. Compare model-to-model.</p>
+    <ul>
+      <li><span class="check">✓</span> Most meaningful: "Paragraph 3: text changed from X to Y"</li>
+      <li><span class="check">✓</span> Formatting-aware (bold, italic, heading level)</li>
+      <li><span class="check">✓</span> Table-aware (cell-level comparison)</li>
+      <li><span class="check">✓</span> UI-friendly (feeds directly into React components)</li>
+      <li><span class="check">✓</span> Deterministic JSON — snapshot-testable</li>
+      <li><span class="cross">✗</span> More complex implementation (~300 lines)</li>
+      <li><span class="cross">✗</span> Format-specific parser per doc type</li>
+    </ul>
+    <p><strong>Best for:</strong> Primary diff engine (what users see), AI enrichment</p>
+  </div>
+
+</div>
+
+<h3>Approach Comparison</h3>
+<table>
+  <tr><th>Metric</th><th>A1: Text</th><th>A2: XML Tree</th><th>A3: Semantic</th></tr>
+  <tr><td>Code size</td><td>~50 lines</td><td>~250 lines</td><td>~300 lines</td></tr>
+  <tr><td>Content changes</td><td><span class="check">✅ Good</span></td><td><span class="warn">⚠ Over-sensitive</span></td><td><span class="check">✅ Best</span></td></tr>
+  <tr><td>Formatting changes</td><td><span class="cross">❌ Invisible</span></td><td><span class="check">✅ Detects</span></td><td><span class="check">✅ Detects</span></td></tr>
+  <tr><td>Structure changes</td><td><span class="cross">❌ Lost</span></td><td><span class="check">✅ Detects</span></td><td><span class="check">✅ Detects</span></td></tr>
+  <tr><td>User-friendliness</td><td><span class="warn">⚠ Basic</span></td><td><span class="cross">❌ Poor</span></td><td><span class="check">✅ Excellent</span></td></tr>
+  <tr><td>Implementation complexity</td><td><span class="check">✅ Low</span></td><td><span class="warn">⚠ Medium</span></td><td><span class="cross">⚠ High</span></td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="edge-cases">4. Edge Case Matrix</h2>
+
+<table class="ec-table">
+  <tr><th>Edge Case</th><th>A1 (Text)</th><th>A2 (XML)</th><th>A3 (Semantic)</th></tr>
+  <tr><td>Formatting change (bold→normal)</td><td><span class="cross">No diff</span></td><td><span class="check">Detects</span></td><td><span class="check">Reports FormattingChanged</span></td></tr>
+  <tr><td>Tracked changes in XML</td><td><span class="cross">Shows deleted text</span></td><td><span class="cross">Structural noise</span></td><td><span class="check">Filters tracked changes</span></td></tr>
+  <tr><td>Reordered XML attributes</td><td><span class="check">N/A (text only)</span></td><td><span class="warn">False diff</span></td><td><span class="check">Normalized during parse</span></td></tr>
+  <tr><td>Heading level change</td><td><span class="cross">Invisible</span></td><td><span class="check">Detects</span></td><td><span class="check">Separate section</span></td></tr>
+  <tr><td>Table cell content</td><td><span class="cross">Mixed with body</span></td><td><span class="check">Detects as &lt;w:tc&gt;</span></td><td><span class="check">Cell-level path</span></td></tr>
+  <tr><td>Comment added/removed</td><td><span class="cross">N/A</span></td><td><span class="warn">Only if comments.xml diffed</span></td><td><span class="check">Separate comparison path</span></td></tr>
+  <tr><td>Embedded image changed</td><td><span class="cross">N/A</span></td><td><span class="warn">Hash compare needed</span></td><td><span class="check">Hash + metadata diff</span></td></tr>
+  <tr><td>Whitespace-only paragraph</td><td><span class="warn">Could flag</span></td><td><span class="check">Detects presence</span></td><td><span class="check">Normalizes whitespace</span></td></tr>
+  <tr><td>Slide reordering (PPTX)</td><td><span class="cross">Meaningless</span></td><td><span class="warn">Hard to match</span></td><td><span class="check">Match by slide ID</span></td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="verdict">5. Verdict & Recommendation</h2>
+
+<div class="verdict">
+  <h3>Use Approach 3 (Semantic Model) as the primary engine</h3>
+  <p>The semantic model produces the richest, most user-friendly output. It correctly handles formatting, tables, headings, and tracked changes — all of which the naive text-extraction approach misses entirely.</p>
+  <p><strong>Fallback strategy:</strong></p>
+  <ul style="margin-left:1.2rem;">
+    <li><strong>A3 (semantic)</strong> for the primary user-facing diff in all three formats</li>
+    <li><strong>A1 (text)</strong> for quick preview mode and git integration (word-to-text filter)</li>
+    <li><strong>A2 (XML tree)</strong> for debugging, validation, and automated testing</li>
+  </ul>
+  <p><strong>For now:</strong> Only Word (.docx) semantic comparison is wired up in <code>compare_office_files()</code>. PowerPoint and Excel return empty results with "not yet implemented" warnings — waiting for their semantic compare modules.</p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="architecture">6. Implementation Architecture</h2>
+
+<pre><code>crates/office-adapter/src/
+├── lib.rs              ← Public compare_office_files() API + compute_summary()
+├── format.rs           ← Extension + zip-signature format detection
+├── unpack.rs           ← Safe zip reading (size/part/bomb limits)
+├── models.rs           ← Serializable data models (OfficeDiffResult, etc.)
+├── xml_util.rs         ← XmlError, create_reader(), namespace helpers
+├── word/
+│   ├── mod.rs          ← Module declarations
+│   ├── extract.rs      ← A1: extract_text() + shared extract_document()
+│   ├── xml_diff.rs     ← A2: compare_xml_trees() (event-stream walk)
+│   └── compare.rs      ← A3: compare_documents() (semantic model diff)
+├── powerpoint/
+│   ├── mod.rs
+│   └── extract.rs      ← extract_slide_text() — placeholder-aware extraction
+└── excel/
+    ├── mod.rs
+    └── extract.rs      ← extract_sheet_text() — inlineStr + numeric cells</code></pre>
+
+<p>All three approaches share the same XML parsing safety layer (<code>xml_util::create_reader</code> with <code>expand_empty_elements</code> and limited entity expansion). Each approach is independently testable with inline tests.</p>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="test-infra">7. Test & Fixture Infrastructure</h2>
+
+<p>Tests span three layers:</p>
+
+<h3>Inline unit tests (each module)</h3>
+<ul>
+  <li><code>word/extract.rs</code> — 6 tests (simple text, multi-paragraph, tables, structured extraction, headings)</li>
+  <li><code>word/compare.rs</code> — 6 tests (identical docs, text change, added paragraph, heading kind, table cell change, JSON serialization)</li>
+  <li><code>word/xml_diff.rs</code> — 5 tests (identical XML, text change, added/deleted paragraph, serialization round-trip)</li>
+  <li><code>powerpoint/extract.rs</code> — 7 tests (title+body, empty slide, multi-paragraph, formatted runs, pictures, center title)</li>
+  <li><code>excel/extract.rs</code> — 8 tests (single cell, multi-cell, multi-row, sparse columns, empty sheet, numeric cells, mixed types, shared strings skip)</li>
+</ul>
+
+<h3>Integration tests (<code>tests/approaches_bench.rs</code>)</h3>
+<p>Runs all three approaches against 5 real <code>.docx</code> files (generated from XML templates):</p>
+<ul>
+  <li>simple-text-change — single paragraph replacement</li>
+  <li>formatting-only-change — bold→normal, text identical</li>
+  <li>multi-paragraph-change — heading + 2 body paragraphs modified</li>
+  <li>table-data-change — 2×3 table with Q2 values updated</li>
+  <li>tracked-changes — marked-up XML vs resolved state</li>
+</ul>
+
+<h3>Fixture tests (<code>tests/fixture_cases.rs</code>)</h3>
+<p>16 tests exercising the full read-from-disk pipeline against binary <code>.docx</code>, <code>.pptx</code>, and <code>.xlsx</code> files in <code>fixtures/cases/office-*-basic/</code>. Fixture files are auto-generated on first run if missing.</p>
+
+<p><strong>Total: 82 tests, all passing.</strong></p>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="learnings">8. Key Learnings</h2>
+
+<h3>quick-xml 0.37 quirks</h3>
+<ul>
+  <li><strong>No namespace resolution</strong> — <code>QName</code> exposes raw bytes only. We check for <code>"w:"</code>, <code>"p:"</code>, <code>"a:"</code> prefixes via byte comparison. Not ideal, but pragmatic.</li>
+  <li><strong><code>read_text()</code> consumes the End event</strong> — after calling <code>reader.read_text(e.name())</code>, the parser has consumed the closing <code>&lt;/w:t&gt;</code>. Any depth counter must be manually decremented (<code>depth -= 1</code>) to stay in sync.</li>
+  <li><strong>Empty elements vs Start+End</strong> — with <code>expand_empty_elements = true</code>, <code>&lt;p:ph type="title"/&gt;</code> becomes a Start event + End event pair, not an Empty event. This is critical for attribute parsing.</li>
+</ul>
+
+<h3>Depth tracking is the hardest part</h3>
+<p>The most recurring bug class across all extraction modules was mismatched depth counting. The root cause: <code>read_text()</code> and child-function calls both silently consume End events. Lessons:</p>
+<ul>
+  <li>Always decrement <code>depth</code> after <code>read_text()</code></li>
+  <li>Always decrement <code>depth</code> after a child extraction function returns (it consumed the End internally)</li>
+  <li>Put <code>depth -= 1</code> <em>before</em> break-condition checks in End handlers</li>
+  <li>Test with tables — they're the best stress test for depth bugs (nested paragraphs inside cells)</li>
+</ul>
+
+<h3>Whitespace is tricky</h3>
+<p>Office XML uses <code>xml:space="preserve"</code> on many elements. We found that trimming <code>&lt;w:t&gt;</code> text caused false diffs when runs within a paragraph needed whitespace between them. Solution: don't trim during text extraction in the shared extractor — only trim at display time in the semantic comparison layer.</p>
+
+<h3>Format-specific knowledge is unavoidable</h3>
+<p>Each Office format uses a different XML namespace (<code>w:</code>, <code>p:</code>, <code>a:</code>, <code>s:</code>) with different element hierarchies. Excel uses a default namespace (no prefix). PowerPoint text lives in <code>&lt;a:t&gt;</code> (DrawingML), not a format-specific element. There is no "generic OOXML parser" that works without format knowledge.</p>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2 id="next-steps">9. Next Steps</h2>
+
+<ol>
+  <li><strong>PowerPoint semantic compare</strong> — Build <code>powerpoint/compare.rs</code> to diff presentations slide-by-slide with shape matching</li>
+  <li><strong>Excel semantic compare</strong> — Build <code>excel/compare.rs</code> with cell-level diff, formula comparison, and shared string table support</li>
+  <li><strong>Tracked changes filtering</strong> — Add tracked-changes-aware extraction that skips <code>&lt;w:del&gt;</code> content during the extraction phase</li>
+  <li><strong>Shared string table</strong> — Parse <code>xl/sharedStrings.xml</code> so <code>t="s"</code> cells resolve to their actual text values</li>
+  <li><strong>CLI integration</strong> — Wire <code>office-adapter</code> into <code>diff-cli</code> with <code>dt diff file1.docx file2.docx --human</code></li>
+  <li><strong>Desktop UI rendering</strong> — Feed <code>OfficeSectionDiff</code> output into the React <code>DiffPane</code> component with format-specific section rendering</li>
+</ol>
+
+<hr style="border-color: var(--border); margin: 2rem 0 1rem;">
+<p style="text-align:center; font-size:0.82rem; color: var(--text2);">
+  See <code>docs/office-research/HANDOFF.md</code> for detailed next-step task breakdowns.
+</p>
+
+</body>
+</html>

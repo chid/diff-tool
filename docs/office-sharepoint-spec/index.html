@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office &amp; SharePoint Integration — Implementation Spec</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --text-muted: #5a5a5a;
+    --text-subtle: #8a8a8a;
+    --border: #e0e0dc;
+    --border-light: #eeeeea;
+    --accent: #2a5a4a;
+    --accent-light: #e8f2ee;
+    --accent-alt: #3a6ab5;
+    --accent-alt-light: #eaf0f8;
+    --green: #2a7a4a;
+    --green-bg: #eaf5ee;
+    --red: #b53535;
+    --red-bg: #faf0f0;
+    --amber: #a06820;
+    --amber-bg: #faf5ea;
+    --code-bg: #f5f5f2;
+    --radius: 5px;
+    --radius-lg: 8px;
+    --font-sans: 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --font-serif: 'Georgia', 'Times New Roman', serif;
+    --max-width: 820px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(250,250,248,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  nav .inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  nav .brand {
+    font-weight: 650;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+    margin-right: 16px;
+    white-space: nowrap;
+  }
+  nav a {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  nav a:hover {
+    background: var(--border-light);
+    color: var(--text);
+  }
+
+  /* ── Hero ── */
+  header.hero {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 56px 24px 40px;
+  }
+  header.hero .pretitle {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  header.hero h1 {
+    font-family: var(--font-serif);
+    font-size: 40px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+  header.hero .subtitle {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 600px;
+    line-height: 1.55;
+  }
+
+  /* ── Main ── */
+  main {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Sections ── */
+  section {
+    margin-bottom: 52px;
+  }
+  section h2 {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
+  }
+  section h3 {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 28px 0 8px;
+    letter-spacing: -0.01em;
+  }
+  section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 20px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  section p {
+    font-size: 15px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    max-width: 640px;
+  }
+  section ul, section ol {
+    margin: 0 0 16px 20px;
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+  section li {
+    margin-bottom: 6px;
+  }
+
+  /* ── Code ── */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+    margin: 12px 0 20px;
+    tab-size: 4;
+  }
+  code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 14px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg);
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-muted);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.03em;
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-blue { background: var(--accent-alt-light); color: var(--accent-alt); }
+
+  /* ── Callouts ── */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-light);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+  .callout strong { color: var(--text); }
+
+  /* ── Phase cards ── */
+  .phase {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px 22px;
+    margin: 14px 0;
+    background: var(--surface);
+  }
+  .phase h4 {
+    margin-top: 0;
+    font-size: 15px;
+    color: var(--text);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .phase .phase-meta {
+    font-size: 13px;
+    color: var(--text-subtle);
+    margin-bottom: 10px;
+  }
+
+  /* ── Code block label ── */
+  .code-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    margin-bottom: -8px;
+    margin-top: 16px;
+  }
+
+  /* ── Footer ── */
+  footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+    border-top: 1px solid var(--border-light);
+    font-size: 13px;
+    color: var(--text-subtle);
+    text-align: center;
+  }
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <span class="brand">Office &amp; SharePoint Spec</span>
+    <a href="#overview">Overview</a>
+    <a href="#office-diff">Office Diff</a>
+    <a href="#sharepoint-sync">SharePoint Sync</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#implementation">Implementation</a>
+    <a href="#design">Design</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="pretitle">Implementation Specification</div>
+  <h1>Office &amp; SharePoint<br>Integration</h1>
+  <p class="subtitle">First-class Microsoft Office format comparison with optional SharePoint cloud sync — bringing Word, PowerPoint, and Excel into the same local-first diff workspace as code, images, and Git changes.</p>
+</header>
+
+<main>
+
+<!-- ══════════════════════════ OVERVIEW ══════════════════════════ -->
+<section id="overview">
+  <h2>Overview</h2>
+
+  <h3>What This Is</h3>
+  <p>This specification defines two additive features for the Diff Tool:</p>
+  <ol>
+    <li><strong>Office document diff</strong> — Compare <code>.docx</code>, <code>.pptx</code>, and <code>.xlsx</code> files natively, without Microsoft Office installed. Uses the Open Packaging Convention (zip + XML) to extract and compare structured document content.</li>
+    <li><strong>SharePoint sync</strong> — Connect to SharePoint Online document libraries via Microsoft Graph API, browse files, compare document versions, and diff server copies against local files.</li>
+  </ol>
+
+  <h3>Product USP</h3>
+  <p>Most diff tools (Kaleidoscope, Beyond Compare, Araxis, DeltaWalker, P4Merge) do not touch Office formats or SharePoint at all. Office comparison tools are either Windows-only, legal-document focused, Excel-only, or cloud/API-first. This tool differentiates by:</p>
+  <ul>
+    <li><strong>Universal workspace</strong> — Code, folders, images, Office docs, and SharePoint libraries in one review tool.</li>
+    <li><strong>Local-first, no Office required</strong> — Unpack and compare Office files natively.</li>
+    <li><strong>SharePoint-aware</strong> — Version history diff, server-vs-local comparison, collaboration review queues.</li>
+    <li><strong>Machine-readable output</strong> — Structured JSON diff models that feed CI, agents, and AI enrichment pipelines.</li>
+  </ul>
+
+  <h3>What's In Scope (V1)</h3>
+  <table>
+    <tr><th>Format</th><th>Extension</th><th>V1 Coverage</th></tr>
+    <tr><td>Word</td><td><code>.docx</code></td><td>Paragraphs, headings, tables, comments, tracked changes, headers, footers, embedded image presence</td></tr>
+    <tr><td>PowerPoint</td><td><code>.pptx</code></td><td>Slide reordering, titles, speaker notes, text boxes, shapes, tables, charts, image presence</td></tr>
+    <tr><td>Excel</td><td><code>.xlsx</code></td><td>Sheets, used ranges, cell values, formulas, named ranges, comments, row/column insertions</td></tr>
+  </table>
+
+  <br>
+  <table>
+    <tr><th>SharePoint Capability</th><th>Description</th></tr>
+    <tr><td>Authentication</td><td>OAuth 2.0 via Microsoft Identity Platform (personal + organizational accounts)</td></tr>
+    <tr><td>Library browsing</td><td>List document libraries, folders, and files via Microsoft Graph API</td></tr>
+    <tr><td>Version diff</td><td>Compare any two versions of a document stored in SharePoint</td></tr>
+    <tr><td>Server-vs-local diff</td><td>Compare a local copy against the latest SharePoint version</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>Out of scope (V1):</strong> Legacy binary formats (<code>.doc</code>, <code>.xls</code>, <code>.ppt</code>), bidirectional sync, SharePoint on-premises, pixel-perfect redline rendering, co-authoring integration.
+  </div>
+
+  <h3>Relationship To Existing Architecture</h3>
+  <p>This spec builds on the architecture established in <a href="../decisions/0001-rust-core-tauri-shell.md">ADR 0001</a>. Two new Rust crates are added alongside the existing core:</p>
+  <pre><code>crates/
+  diff-core/          ✅ existing
+  git-adapter/        ✅ existing
+  diff-cli/           ✅ existing
+  ai-adapter/         🔲 planned (P6)
+  office-adapter/     🆕 Office format detection, extraction, and diff
+  sharepoint-adapter/ 🆕 SharePoint OAuth, Graph API, version fetching</code></pre>
+</section>
+
+<!-- ══════════════════════════ OFFICE DIFF ══════════════════════════ -->
+<section id="office-diff">
+  <h2>Office Document Diff</h2>
+
+  <h3>How It Works</h3>
+  <p>Modern Office files (<code>.docx</code>, <code>.pptx</code>, <code>.xlsx</code>) are zip archives containing XML parts. The <code>office-adapter</code> crate:</p>
+  <ol>
+    <li>Detects format from file extension and zip signature.</li>
+    <li>Unpacks the zip archive with safety limits (size, part count).</li>
+    <li>Parses relevant XML parts into structured document models.</li>
+    <li>Compares left and right models section-by-section using <code>diff-core</code> for text, plus structural comparison for sections, slides, and sheets.</li>
+    <li>Emits a deterministic <code>OfficeDiffResult</code>.</li>
+  </ol>
+  <p>No Microsoft Office installation is required. No network access. Fully offline.</p>
+
+  <h3>Supported Formats In Detail</h3>
+
+  <h4>Word (<code>.docx</code>)</h4>
+  <p>Paragraph text, heading levels 1–9 and document outline, table cell contents with merged cell detection, comment text with author and anchor location, tracked changes presence detection, header/footer text per section, footnote/endnote text, embedded image presence and dimensions (content hash only, no pixel diff).</p>
+  <p>V1 outputs a structured change list, not a pixel-perfect redline. The model captures <em>what</em> changed (paragraph 3 text modified, table 2 row added, heading "Overview" → "Summary") rather than producing a formatted redline <code>.docx</code>.</p>
+
+  <h4>PowerPoint (<code>.pptx</code>)</h4>
+  <p>Slide addition, deletion, and reordering with structural diff. Title text, speaker notes, text box contents (multi-paragraph), shape count and coarse geometry, image presence/size/hash, table text, chart presence and source data summary.</p>
+  <p>V1 shows slide-level cards with text and metadata. Visual thumbnails are planned for a later milestone.</p>
+
+  <h4>Excel (<code>.xlsx</code>)</h4>
+  <p>Sheet additions, deletions, renames, and reordering. Used range dimensions, cell values (string, number, boolean, date), formula text, cell comments and notes, named ranges (name, scope, reference), row/column insertions and deletions, basic formatting detection if cheap to extract.</p>
+  <p>V1 must support <strong>sheet and range filters</strong> so large workbooks do not force a full comparison: <code>--sheet Sheet1 --range A1:Z100</code>.</p>
+
+  <h3>Core Data Model</h3>
+  <div class="code-label">Top-level types</div>
+  <pre><code>pub enum OfficeFormat { Word, PowerPoint, Excel }
+
+pub struct OfficeDiffRequest {
+    pub left: PathBuf,
+    pub right: PathBuf,
+    pub format: OfficeFormat,
+    pub options: OfficeDiffOptions,
+}
+
+pub struct OfficeDiffResult {
+    pub format: OfficeFormat,
+    pub summary: OfficeDiffSummary,
+    pub sections: Vec&lt;OfficeSectionDiff&gt;,
+    pub warnings: Vec&lt;String&gt;,
+    pub unsupported_features: Vec&lt;String&gt;,
+}
+
+pub struct OfficeSectionDiff {
+    pub id: String,
+    pub label: String,
+    pub kind: OfficeSectionKind,
+    pub status: ChangeStatus,         // Added | Deleted | Modified | Unchanged | Reordered
+    pub changes: Vec&lt;OfficeAtomicChange&gt;,
+}
+
+pub struct OfficeAtomicChange {
+    pub path: String,                 // e.g., "row=5,col=C", "slide=3,shape=title"
+    pub kind: OfficeAtomicChangeKind, // TextChanged | FormulaChanged | SlideReordered | ...
+    pub before: Option&lt;String&gt;,
+    pub after: Option&lt;String&gt;,
+    pub metadata: serde_json::Value,  // Format-specific enrichment
+}</code></pre>
+
+  <h3>CLI</h3>
+  <pre><code># Word
+dt office left.docx right.docx --json
+
+# PowerPoint
+dt office left.pptx right.pptx --json
+
+# Excel with filters
+dt office left.xlsx right.xlsx --sheet "Budget" --range A1:Z100 --json
+
+# Human output
+dt office left.docx right.docx</code></pre>
+
+  <div class="code-label">Example human output</div>
+  <pre><code>Word document: 3 sections changed, 12 text changes, 1 table changed
+
+  [Modified] §3 "Project Overview"
+    - Text changed: "Q1 2025" → "Q2 2025"
+
+  [Modified] §7 "Budget"
+    - Table changed: "Cost Summary" — 2 cells changed, 1 row added
+
+  [Modified] Comments
+    - Text added: "Review the Q2 numbers before publishing — @alex"
+
+PowerPoint: 2 slides changed, 1 slide added
+
+  [Added] Slide 5: "Roadmap"
+  [Modified] Slide 2: "Executive Summary"
+    - Title changed: "Q1 Summary" → "Q2 Summary"</code></pre>
+
+  <h3>Safety Guarantees</h3>
+  <ul>
+    <li><strong>Zip bomb protection:</strong> <code>max_part_size</code> (default 50 MB), <code>max_part_count</code> (default 10,000 parts), total uncompressed limit of 200 MB.</li>
+    <li><strong>Streaming extraction:</strong> XML parts streamed rather than fully buffered in memory.</li>
+    <li><strong>Image hashing:</strong> Embedded media hashed incrementally without loading full binary into memory.</li>
+    <li><strong>XML safety:</strong> Entity expansion disabled (Billion Laughs attack prevented).</li>
+  </ul>
+</section>
+
+<!-- ══════════════════════════ SHAREPOINT ══════════════════════════ -->
+<section id="sharepoint-sync">
+  <h2>SharePoint Sync</h2>
+
+  <h3>User Stories</h3>
+
+  <h4>Browse and Compare</h4>
+  <p>A user opens the SharePoint browser in the app, navigates to a document library, selects two files (or two versions of the same file), and sees a structured diff — all without leaving the tool.</p>
+
+  <h4>Version History Diff</h4>
+  <p>A document with 15 versions in SharePoint. The user picks versions 7 and 14, the tool fetches both (caching for reuse), diffs them, and displays what changed.</p>
+
+  <h4>Server-vs-Local Diff</h4>
+  <p>A user has been editing a local <code>.docx</code>. They connect to SharePoint, find the same document, and diff their local copy against the latest server version. If both have changed, the tool flags a potential conflict.</p>
+
+  <h4>Review Queue</h4>
+  <p>A "Shared With Me" view showing documents recently modified by teammates. Click to see what changed since last viewed.</p>
+
+  <h3>Authentication</h3>
+  <p><strong>OAuth 2.0</strong> with PKCE via Microsoft Identity Platform. Supports personal Microsoft accounts (<code>common</code> endpoint) and organizational/Entra ID accounts.</p>
+
+  <table>
+    <tr><th>Account Type</th><th>V1 Support</th></tr>
+    <tr><td>Personal Microsoft account</td><td><span class="badge badge-green">✅</span></td></tr>
+    <tr><td>Work/school (Entra ID)</td><td><span class="badge badge-green">✅</span></td></tr>
+    <tr><td>Multi-tenant app registration</td><td><span class="badge badge-green">✅</span></td></tr>
+    <tr><td>Sovereign clouds (GCC, etc.)</td><td><span class="badge badge-amber">V2</span></td></tr>
+  </table>
+
+  <h4>Token Storage</h4>
+  <p>Access tokens stored in memory only (1-hour lifetime). Refresh tokens stored in <strong>OS keychain</strong> via the <code>keyring</code> crate — same mechanism as planned AI BYOK keys. Never stored in settings JSON, localStorage, or source files.</p>
+
+  <h4>Required Scopes</h4>
+  <table>
+    <tr><th>Scope</th><th>Purpose</th></tr>
+    <tr><td><code>Sites.Read.All</code></td><td>List sites and document libraries</td></tr>
+    <tr><td><code>Files.Read.All</code></td><td>Read file contents and metadata</td></tr>
+    <tr><td><code>Sites.ReadWrite.All</code></td><td>Optional: for future sync/push</td></tr>
+    <tr><td><code>offline_access</code></td><td>Refresh token for long-lived sessions</td></tr>
+  </table>
+
+  <h3>Microsoft Graph API Endpoints</h3>
+  <pre><code># List sites
+GET /v1.0/sites?search=*
+
+# List document libraries
+GET /v1.0/sites/{site-id}/drives
+
+# List files and folders
+GET /v1.0/drives/{drive-id}/root/children
+GET /v1.0/drives/{drive-id}/root:/path/to/folder:/children
+
+# Get file metadata
+GET /v1.0/drives/{drive-id}/items/{item-id}
+
+# List versions
+GET /v1.0/drives/{drive-id}/items/{item-id}/versions
+
+# Download file content
+GET /v1.0/drives/{drive-id}/items/{item-id}/content
+GET /v1.0/drives/{drive-id}/items/{item-id}/versions/{version-id}/content</code></pre>
+
+  <h3>File Caching</h3>
+  <pre><code>~/.cache/dt/sharepoint/
+  {site-id}/
+    {drive-id}/
+      {item-id}/
+        v{version-id}.docx
+        v{version-id}.meta.json</code></pre>
+  <p>Cache key = <code>SHA256(site_id + drive_id + item_id + version_id)</code>. TTL = 24 hours (configurable). Max 500 MB with LRU eviction. Manual clear from Settings.</p>
+
+  <h3>CLI Commands</h3>
+  <pre><code># Connection
+dt sharepoint connect
+dt sharepoint disconnect
+
+# Browsing
+dt sharepoint sites
+dt sharepoint drives --site-id &lt;id&gt;
+dt sharepoint ls --drive-id &lt;id&gt; [--path &lt;path&gt;]
+dt sharepoint versions --drive-id &lt;id&gt; --item-id &lt;id&gt;
+
+# Diff
+dt sharepoint diff \
+  --drive-id &lt;id&gt; --item-id &lt;id&gt; \
+  --left-version &lt;vid&gt; --right-version &lt;vid&gt; --json
+
+dt sharepoint diff-local \
+  --local &lt;path&gt; --drive-id &lt;id&gt; --item-id &lt;id&gt; --json</code></pre>
+
+  <h3>Fail States</h3>
+  <table>
+    <tr><th>State</th><th>Behavior</th></tr>
+    <tr><td>No connection</td><td>"Connect to SharePoint" button shown</td></tr>
+    <tr><td>Token expired</td><td>Auto-refresh; prompt re-auth if refresh fails</td></tr>
+    <tr><td>Network error</td><td>"SharePoint unavailable. [Retry]" with exponential backoff</td></tr>
+    <tr><td>Permission denied</td><td>"You don't have access to this library."</td></tr>
+    <tr><td>File checked out</td><td>Warning: "Checked out by [name]"</td></tr>
+    <tr><td>Rate limited</td><td>Retry-After honored; "Retrying in [n] seconds"</td></tr>
+  </table>
+</section>
+
+<!-- ══════════════════════════ ARCHITECTURE ══════════════════════════ -->
+<section id="architecture">
+  <h2>Architecture</h2>
+
+  <h3>Crate Dependency Graph</h3>
+  <pre><code>                    ┌──────────────┐
+                    │  diff-cli    │
+                    └──────┬───────┘
+                           │ uses
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
+  │ office-      │ │ sharepoint-  │ │ ai-adapter       │
+  │ adapter      │ │ adapter      │ │ (planned)        │
+  └──────┬───────┘ └──────┬───────┘ └────────┬─────────┘
+         │                │                  │
+         ▼                ▼                  ▼
+  ┌──────────────────────────────────────────────────┐
+  │                   diff-core                       │
+  │  (text diff, hunk generation, intraline spans)    │
+  └──────────────────────────────────────────────────┘</code></pre>
+
+  <h3><code>office-adapter</code> Module Structure</h3>
+  <pre><code>crates/office-adapter/
+  src/
+    lib.rs                  # Public API, OfficeDiffRequest/Result
+    format.rs               # Format detection (extension + zip signature)
+    unpack.rs               # Safe zip reading with size/part limits
+    word/
+      mod.rs                # Word document model
+      extract.rs            # XML → structured WordDocument
+      compare.rs            # WordDocument → Vec&lt;OfficeSectionDiff&gt;
+    powerpoint/
+      mod.rs                # PowerPoint document model
+      extract.rs            # XML → structured Presentation
+      compare.rs            # Presentation → Vec&lt;OfficeSectionDiff&gt;
+    excel/
+      mod.rs                # Excel document model
+      extract.rs            # XML → structured Workbook
+      compare.rs            # Workbook → Vec&lt;OfficeSectionDiff&gt;
+    models.rs               # Shared enums and types
+    xml_util.rs             # XML parsing helpers</code></pre>
+
+  <h4>Key Dependencies</h4>
+  <table>
+    <tr><th>Crate</th><th>Purpose</th></tr>
+    <tr><td><code>diff-core</code></td><td>Text-level diff for extracted content</td></tr>
+    <tr><td><code>zip = "2"</code></td><td>Safe zip reading with size limits</td></tr>
+    <tr><td><code>quick-xml</code></td><td>Streaming XML extraction for large Excel sheets</td></tr>
+    <tr><td><code>roxmltree</code></td><td>Random-access XML for Word/PowerPoint document trees</td></tr>
+    <tr><td><code>sha2</code></td><td>Content hashing for embedded images</td></tr>
+  </table>
+
+  <h3><code>sharepoint-adapter</code> Module Structure</h3>
+  <pre><code>crates/sharepoint-adapter/
+  src/
+    lib.rs                  # Public API, connection types
+    auth.rs                 # OAuth 2.0 PKCE flow, token management
+    client.rs               # Microsoft Graph API HTTP client
+    sites.rs                # Site and drive listing
+    files.rs                # File/folder browsing
+    versions.rs             # Version history
+    cache.rs                # Local file cache for fetched documents
+    models.rs               # SharePoint-specific types</code></pre>
+
+  <h4>Key Dependencies</h4>
+  <table>
+    <tr><th>Crate</th><th>Purpose</th></tr>
+    <tr><td><code>office-adapter</code></td><td>Diff computation for fetched Office files</td></tr>
+    <tr><td><code>reqwest</code></td><td>HTTP client for Microsoft Graph API</td></tr>
+    <tr><td><code>oauth2 = "5"</code></td><td>OAuth 2.0 PKCE authorization flow</td></tr>
+    <tr><td><code>keyring = "3"</code></td><td>OS keychain storage for tokens</td></tr>
+    <tr><td><code>sha2</code></td><td>Cache key hashing</td></tr>
+  </table>
+
+  <h3>Tauri Bridge</h3>
+  <pre><code>┌────────────────────────────────────────────────┐
+│                 React UI                        │
+│  ┌──────────┐ ┌──────────┐ ┌────────────────┐  │
+│  │FileTree  │ │DiffPane  │ │SharePointBrowser│  │
+│  │(source   │ │(Office   │ │(sites, drives,  │  │
+│  │ selector)│ │ renderer)│ │ files, versions)│  │
+│  └────┬─────┘ └────┬─────┘ └───────┬────────┘  │
+├───────┼────────────┼───────────────┼────────────┤
+│       │    Tauri IPC Commands      │            │
+│       ▼            ▼               ▼            │
+│  ┌──────────────────────────────────────────┐   │
+│  │              Rust Backend                 │   │
+│  │  office-adapter  sharepoint-adapter       │   │
+│  └──────────────────────────────────────────┘   │
+└────────────────────────────────────────────────┘</code></pre>
+
+  <h3>Security Review Checklist</h3>
+  <ul>
+    <li>OAuth PKCE with system browser — no embedded webview for auth</li>
+    <li>Access tokens never logged or serialized to disk</li>
+    <li>Refresh tokens stored exclusively in OS keychain</li>
+    <li>Zip bomb protection tested with adversarial fixtures</li>
+    <li>XML entity expansion disabled</li>
+    <li>SharePoint cache files use restrictive permissions (0600)</li>
+    <li>No SharePoint data proxied through third-party services</li>
+    <li>Rate limiting honored with Retry-After header parsing</li>
+  </ul>
+</section>
+
+<!-- ══════════════════════════ IMPLEMENTATION ══════════════════════════ -->
+<section id="implementation">
+  <h2>Implementation Plan</h2>
+
+  <div class="phase">
+    <h4>Phase 1: Office Adapter Foundation</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~3–4 weeks</span> &nbsp; New crate, no dependencies</p>
+    <p>Format detection, safe zip reading, and structured text extraction for Word, PowerPoint, and Excel. Unit tests for format detection and zip safety. Integration tests with hand-authored minimal <code>.docx</code>, <code>.pptx</code>, <code>.xlsx</code>.</p>
+  </div>
+
+  <div class="phase">
+    <h4>Phase 2: Office Comparison Engine</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~2–3 weeks</span> &nbsp; Depends on Phase 1</p>
+    <p>Section matching, text comparison via <code>diff-core</code>, structural comparison (added/deleted/reordered), Excel formula and named range comparison, image metadata comparison, fixture-driven tests with expected JSON output, performance test for large Excel workbooks with range filters.</p>
+  </div>
+
+  <div class="phase">
+    <h4>Phase 3: CLI and Desktop Integration</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~2–3 weeks</span> &nbsp; Depends on Phase 2</p>
+    <p><code>dt office</code> subcommand with JSON and human modes, <code>--sheet</code> and <code>--range</code> flags, CLI snapshot tests, <code>compare_office_files</code> Tauri command, <code>&lt;OfficeDiffPane&gt;</code> React component with format-specific navigation, desktop UI smoke tests.</p>
+  </div>
+
+  <div class="phase">
+    <h4>Phase 4: SharePoint Adapter Foundation</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~3–4 weeks</span> &nbsp; Depends on Phase 2</p>
+    <p>OAuth 2.0 PKCE flow with system browser, token storage in OS keychain, Microsoft Graph API HTTP client, site/drive/file browsing, <code>&lt;SharePointBrowser&gt;</code> React component, "Connect SharePoint" settings flow, unit tests with mocked Graph API responses, integration test with real tenant (opt-in).</p>
+  </div>
+
+  <div class="phase">
+    <h4>Phase 5: SharePoint Version Diff</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~2–3 weeks</span> &nbsp; Depends on Phase 4</p>
+    <p>Version history listing, file download for specific versions, local file cache with hash-keyed storage and TTL, version-to-version diff, local-vs-server diff, cache eviction (LRU, max size), version picker UI, CLI commands for <code>dt sharepoint diff</code> and <code>dt sharepoint diff-local</code>.</p>
+  </div>
+
+  <div class="phase">
+    <h4>Phase 6: Collaboration Features</h4>
+    <p class="phase-meta"><span class="badge badge-blue">~2–3 weeks</span> &nbsp; Depends on Phase 5 + AI adapter</p>
+    <p>Shared With Me / recent collaborator changes view, check-out status detection, local-vs-server conflict detection with 3-way merge, AI-powered summaries for SharePoint diffs, risk scoring for Office document changes, onboarding tooltips and usage documentation.</p>
+  </div>
+
+  <h3>Timeline Summary</h3>
+  <table>
+    <tr><th>Phase</th><th>Effort</th><th>Cumulative</th></tr>
+    <tr><td>1. Office adapter foundation</td><td>3–4 weeks</td><td>3–4 weeks</td></tr>
+    <tr><td>2. Office comparison engine</td><td>2–3 weeks</td><td>5–7 weeks</td></tr>
+    <tr><td>3. CLI and desktop integration</td><td>2–3 weeks</td><td>7–10 weeks</td></tr>
+    <tr><td>4. SharePoint adapter foundation</td><td>3–4 weeks</td><td>10–14 weeks</td></tr>
+    <tr><td>5. SharePoint version diff</td><td>2–3 weeks</td><td>12–17 weeks</td></tr>
+    <tr><td>6. Collaboration features</td><td>2–3 weeks</td><td>14–20 weeks</td></tr>
+  </table>
+  <p><strong>Total: ~14–20 weeks</strong> for full Office + SharePoint integration.</p>
+
+  <h3>Parallelization Opportunities</h3>
+  <ul>
+    <li>Phases 1–3 (Office diff) can proceed in parallel with current P2–P4 work (folder diff, merge, images).</li>
+    <li>Phase 4 can begin once Phase 2 is complete (sharepoint-adapter needs office-adapter for diff, not the CLI/UI work).</li>
+    <li>AI enrichment (Phase 6) can be developed in parallel with Phases 4–5 once the AI adapter is available.</li>
+  </ul>
+
+  <h3>Risk Register</h3>
+  <table>
+    <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+    <tr><td>XML parsing complexity exceeds estimates</td><td><span class="badge badge-red">High</span></td><td>Spike extraction early; test with real Office files from multiple versions</td></tr>
+    <tr><td>Graph API rate limits block real-world use</td><td><span class="badge badge-amber">Medium</span></td><td>Aggressive caching, request batching, exponential backoff</td></tr>
+    <tr><td>OAuth flow UX friction (system browser, redirect)</td><td><span class="badge badge-amber">Medium</span></td><td>Test on macOS + Windows early; custom protocol as fallback</td></tr>
+    <tr><td>Large Excel workbooks cause memory issues</td><td><span class="badge badge-amber">Medium</span></td><td>Stream cells, apply range filters early, paginate results</td></tr>
+    <tr><td>SharePoint on-prem not supported (V1 limitation)</td><td><span class="badge badge-green">Low</span></td><td>Document clearly; address in V2 if demand exists</td></tr>
+  </table>
+</section>
+
+<!-- ══════════════════════════ DESIGN ══════════════════════════ -->
+<section id="design">
+  <h2>Design Notes</h2>
+
+  <p>These notes extend the <a href="../design.md">Editorial Diff design language</a>. All UI should feel consistent with the existing code diff and folder compare modes — paper-like surfaces, strong typographic hierarchy, restrained color, compact controls.</p>
+
+  <h3>Word Diff</h3>
+  <p><strong>Layout:</strong> Two-column reading layout. Left sidebar shows the document outline (heading tree). Main area shows change cards in reading order. Right margin has an annotations rail with change markers. Each changed section appears as a card with section label, change badge, before/after text, and table changes rendered as compact grids.</p>
+
+  <h3>PowerPoint Diff</h3>
+  <p><strong>Layout:</strong> Slide rail on the left (thumbnail-sized cards with slide numbers and change badges). Main area shows selected slide changes in detail. Slide cards show title, change badge, and mini summary. Detail view shows title change, text box changes labeled by shape name, and collapsible speaker notes. Reordering indicated by arrow or position badge.</p>
+
+  <h3>Excel Diff</h3>
+  <p><strong>Layout:</strong> Sheet picker tabs at top with change count badges. Below, document-like table view showing only changed cells in a compact grid. Each cell shows address (e.g., "C12") and value change. Formula changes have distinct highlighting. Row/column insertions shown as structural annotations. Range filter bar for scoping comparison to specific regions.</p>
+
+  <h3>SharePoint Browser</h3>
+  <p><strong>Layout:</strong> Slide-out panel or left-side pane replacing the file tree. Three-level hierarchy: Sites → Drives → Files. Status indicator shows connection health. Version picker displays as a timeline or compact list with major/minor version distinction. Two selected versions enable the compare button.</p>
+
+  <h3>Loading &amp; Empty States</h3>
+  <table>
+    <tr><th>State</th><th>Message</th></tr>
+    <tr><td>Loading Word</td><td>"Preparing document..." → "Extracting sections..." → "Comparing..."</td></tr>
+    <tr><td>Loading PowerPoint</td><td>"Loading presentation..." → "Analyzing 24 slides..." → cards appear progressively</td></tr>
+    <tr><td>Loading Excel</td><td>"Loading workbook..." → "Processing 8 sheets..." → "Comparing cells in Budget..."</td></tr>
+    <tr><td>No file selected</td><td>"Open a Word, PowerPoint, or Excel file to compare."</td></tr>
+    <tr><td>Identical documents</td><td>"These documents are identical." with green checkmark</td></tr>
+    <tr><td>SharePoint not connected</td><td>"Connect SharePoint to browse document libraries and compare versions."</td></tr>
+    <tr><td>No versions</td><td>"This file has no previous versions in SharePoint."</td></tr>
+    <tr><td>Corrupt file</td><td>"This file appears to be corrupt or not a valid Office document. [Details]"</td></tr>
+    <tr><td>Unsupported format</td><td>".doc files (legacy) are not supported. Save as .docx to compare."</td></tr>
+  </table>
+
+  <h3>Typography</h3>
+  <ul>
+    <li><strong>Word text:</strong> Serif or serif-like display face — manuscript/proofing sheet feel.</li>
+    <li><strong>PowerPoint titles:</strong> Larger, bolder weight for slide headings.</li>
+    <li><strong>Excel cells:</strong> Monospace for values and formulas. Tabular number alignment.</li>
+    <li><strong>SharePoint metadata:</strong> Sans-serif for UI chrome — compact and scannable.</li>
+  </ul>
+
+  <h3>Motion</h3>
+  <p>Restrained and editorial. Slide cards reveal top-to-bottom with stagger. Section expansion uses height transitions. SharePoint browser slides in as a left drawer. Change cards highlight briefly when scrolled to. No bouncy or playful animations.</p>
+</section>
+
+</main>
+
+<footer>
+  <p>Diff Tool — Office &amp; SharePoint Integration Spec &nbsp;·&nbsp; <a href="../architecture.md">Architecture</a> &nbsp;·&nbsp; <a href="../design.md">Design Language</a> &nbsp;·&nbsp; <a href="../../TODO.md">TODO</a></p>
+</footer>
+
+</body>
+</html>

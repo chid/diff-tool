@@ -1,0 +1,72 @@
+---
+source: crates/diff-cli/tests/cli.rs
+expression: stdout
+---
+{
+  "files": [
+    {
+      "left": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/basic-replacement/left.txt",
+      "right": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/basic-replacement/right.txt",
+      "hunks": [
+        {
+          "old_range": {
+            "start": 1,
+            "len": 3
+          },
+          "new_range": {
+            "start": 1,
+            "len": 3
+          },
+          "lines": [
+            {
+              "kind": "context",
+              "old_no": 1,
+              "new_no": 1,
+              "text": "one",
+              "intra_spans": []
+            },
+            {
+              "kind": "deletion",
+              "old_no": 2,
+              "new_no": null,
+              "text": "two",
+              "intra_spans": [
+                {
+                  "start": 0,
+                  "len": 3
+                }
+              ]
+            },
+            {
+              "kind": "addition",
+              "old_no": null,
+              "new_no": 2,
+              "text": "deux",
+              "intra_spans": [
+                {
+                  "start": 0,
+                  "len": 4
+                }
+              ]
+            },
+            {
+              "kind": "context",
+              "old_no": 3,
+              "new_no": 3,
+              "text": "three",
+              "intra_spans": []
+            }
+          ],
+          "foldable_context": false
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 2
+  },
+  "warnings": [],
+  "truncated": false
+}

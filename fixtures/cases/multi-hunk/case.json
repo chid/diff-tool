@@ -1,0 +1,10 @@
+{
+  "name": "multi hunk changes far apart",
+  "ignore": "none",
+  "expected": {
+    "additions": 2,
+    "deletions": 2,
+    "unchanged": 12,
+    "truncated": false
+  }
+}

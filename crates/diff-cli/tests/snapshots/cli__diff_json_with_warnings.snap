@@ -1,0 +1,60 @@
+---
+source: crates/diff-cli/tests/cli.rs
+expression: redacted
+---
+{
+  "files": [
+    {
+      "left": "<TMPDIR>/bad.txt",
+      "right": "<TMPDIR>/good.txt",
+      "hunks": [
+        {
+          "old_range": {
+            "start": 1,
+            "len": 1
+          },
+          "new_range": {
+            "start": 1,
+            "len": 1
+          },
+          "lines": [
+            {
+              "kind": "deletion",
+              "old_no": 1,
+              "new_no": null,
+              "text": "Hello�",
+              "intra_spans": [
+                {
+                  "start": 0,
+                  "len": 8
+                }
+              ]
+            },
+            {
+              "kind": "addition",
+              "old_no": null,
+              "new_no": 1,
+              "text": "hello",
+              "intra_spans": [
+                {
+                  "start": 0,
+                  "len": 5
+                }
+              ]
+            }
+          ],
+          "foldable_context": false
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 0
+  },
+  "warnings": [
+    "<TMPDIR>/bad.txt contains invalid UTF-8; non-UTF-8 bytes replaced with replacement characters"
+  ],
+  "truncated": false
+}

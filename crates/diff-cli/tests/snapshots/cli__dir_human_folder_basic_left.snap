@@ -1,0 +1,5 @@
+---
+source: crates/diff-cli/tests/cli.rs
+expression: stdout
+---
+3 entries

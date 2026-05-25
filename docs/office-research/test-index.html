@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Adapter — Complete Test Index (82 Tests)</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --text: #e1e4ed;
+    --text2: #9ca3b8;
+    --accent: #60a5fa;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --border: #2e3240;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: 0.25rem; }
+  h2 { font-size: 1.5rem; color: var(--text); margin: 2.5rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.15rem; color: var(--text); margin: 1.5rem 0 0.75rem; }
+  .subtitle { color: var(--text2); font-size: 0.95rem; margin-bottom: 1.5rem; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+  .stat-card .number {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    line-height: 1.1;
+  }
+  .stat-card .label {
+    font-size: 0.8rem;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.35rem;
+  }
+  .stat-card.all-pass .number { color: var(--green); }
+
+  /* Related links */
+  .related-links {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .related-link {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem 1rem;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: border-color 0.15s;
+  }
+  .related-link:hover { border-color: var(--accent); }
+
+  /* Module section */
+  .module {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+  }
+  .module-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.25rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .module-header h4 {
+    font-size: 0.95rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .module-header .file-path {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--text2);
+  }
+  .test-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(96,165,250,0.12);
+    padding: 0.2em 0.65em;
+    border-radius: 999px;
+  }
+
+  /* Test list */
+  .test-list {
+    padding: 0.6rem 1.25rem 1rem;
+  }
+  .test-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.75rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(46,50,64,0.5);
+    font-size: 0.85rem;
+    align-items: center;
+  }
+  .test-row:last-child { border-bottom: none; }
+  .test-name {
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+  .test-desc {
+    color: var(--text2);
+    font-size: 0.82rem;
+  }
+
+  /* Status badges */
+  .status {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15em 0.55em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .status-pass { background: rgba(74,222,128,0.12); color: var(--green); }
+  .status-stub { background: rgba(251,191,36,0.12); color: var(--amber); }
+  .status-na { background: rgba(156,163,184,0.1); color: var(--text2); }
+
+  /* Layer tags */
+  .layer {
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 0.12em 0.5em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .layer-unit { background: rgba(167,139,250,0.12); color: var(--purple); }
+  .layer-integration { background: rgba(96,165,250,0.12); color: var(--accent); }
+  .layer-fixture { background: rgba(74,222,128,0.12); color: var(--green); }
+
+  /* Section group within test list */
+  .test-group-label {
+    padding: 0.5rem 0 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text2);
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  /* Test status legend */
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text2);
+  }
+
+  code {
+    background: var(--surface2);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-size: 0.88em;
+    color: var(--text);
+  }
+
+  a.src-link { color: var(--accent); text-decoration: none; font-size: 0.8rem; }
+  a.src-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>📋 Office Adapter — Complete Test Index</h1>
+<p class="subtitle">Every test function, its purpose, status, and location. 82 tests across 4 binaries — all passing.<br>Generated May 2025 from <code>crates/office-adapter/</code><br><small style="color:var(--text2);">Note: The 5 <code>tests/common/mod.rs</code> self-tests run in <em>both</em> integration binaries, so cargo reports 82 total runs (not 82 unique tests).</small></p>
+
+<div class="stats-bar">
+  <div class="stat-card">
+    <span class="number">82</span>
+    <span class="label">Total Tests</span>
+  </div>
+  <div class="stat-card all-pass">
+    <span class="number">0</span>
+    <span class="label">Failures</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">54</span>
+    <span class="label">Unit Tests (lib)</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">12</span>
+    <span class="label">Integration Tests</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">16</span>
+    <span class="label">Fixture Tests</span>
+  </div>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="status status-pass">PASS</span> passing test</span>
+  <span class="legend-item"><span class="layer layer-unit">UNIT</span> inline #[test]</span>
+  <span class="legend-item"><span class="layer layer-integration">INTEG</span> approaches_bench</span>
+  <span class="legend-item"><span class="layer layer-fixture">FIXT</span> fixture_cases</span>
+</div>
+
+<div class="related-links">
+  <a href="testing-approach.md" class="related-link">📖 Testing Approach Document</a>
+  <a href="index.html" class="related-link">🔬 Research & Approach Report</a>
+  <a href="HANDOFF.md" class="related-link">📤 Handoff & Next Steps</a>
+  <a href="../../crates/office-adapter/src/" class="related-link">📁 Source Code</a>
+  <a href="../../crates/office-adapter/tests/" class="related-link">🧪 Test Files</a>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>1. Core Pipeline Tests</h2>
+
+<!-- FORMAT -->
+<div class="module">
+  <div class="module-header">
+    <h4>🔍 Format Detection <span class="test-count">8 tests</span></h4>
+    <span class="file-path">src/format.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Extension-based detection</div>
+    <div class="test-row">
+      <span class="test-name">test_detect_docx</span>
+      <span class="test-desc">.docx → OfficeFormat::Word</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_detect_pptx</span>
+      <span class="test-desc">.pptx → OfficeFormat::PowerPoint</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_detect_xlsx</span>
+      <span class="test-desc">.xlsx → OfficeFormat::Excel</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_case_insensitive_extension</span>
+      <span class="test-desc">.DOCX (uppercase) still detected as Word</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Error paths</div>
+    <div class="test-row">
+      <span class="test-name">test_unknown_extension</span>
+      <span class="test-desc">.txt returns UnknownFormat error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_invalid_zip</span>
+      <span class="test-desc">Non-zip content → InvalidZip error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_corrupt_zip_signature</span>
+      <span class="test-desc">Garbage bytes → InvalidZip error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_is_office_extension</span>
+      <span class="test-desc">Helper: docx/pptx/xlsx recognized, others not</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- UNPACK -->
+<div class="module">
+  <div class="module-header">
+    <h4>📦 Zip Unpacking & Safety <span class="test-count">6 tests</span></h4>
+    <span class="file-path">src/unpack.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Happy path</div>
+    <div class="test-row">
+      <span class="test-name">test_read_valid_zip</span>
+      <span class="test-desc">Valid zip → returns archive map</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_entry_names</span>
+      <span class="test-desc">Entry names correctly captured</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Safety limits</div>
+    <div class="test-row">
+      <span class="test-name">test_enforces_max_part_count</span>
+      <span class="test-desc">Too many parts → error (zip bomb defense)</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_skips_oversized_parts</span>
+      <span class="test-desc">Parts exceeding size limit → skipped + tracked</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_enforces_total_uncompressed_limit</span>
+      <span class="test-desc">Cumulative size limit → error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_rejects_corrupt_zip</span>
+      <span class="test-desc">Corrupt zip → error (not panic)</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- XML UTIL -->
+<div class="module">
+  <div class="module-header">
+    <h4>⚙️ XML Utilities <span class="test-count">2 tests</span></h4>
+    <span class="file-path">src/xml_util.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-name">test_create_reader</span>
+      <span class="test-desc">Reader created with expand_empty_elements + DTD disabled</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_read_text_from_event</span>
+      <span class="test-desc">read_text() correctly extracts from Start event</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODELS -->
+<div class="module">
+  <div class="module-header">
+    <h4>📊 Data Models & Serialization <span class="test-count">3 tests</span></h4>
+    <span class="file-path">src/models.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-name">test_office_diff_options_defaults</span>
+      <span class="test-desc">Default options have sensible values</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_office_diff_result_serialization</span>
+      <span class="test-desc">OfficeDiffResult ↔ JSON round-trip</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_change_status_serde</span>
+      <span class="test-desc">All 5 ChangeStatus variants round-trip via JSON</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- LIB -->
+<div class="module">
+  <div class="module-header">
+    <h4>🌐 Public API (lib.rs) <span class="test-count">3 tests</span></h4>
+    <span class="file-path">src/lib.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-name">test_word_compare_produces_real_results</span>
+      <span class="test-desc">Word semantic compare wired → real sections + summary, no stub warning</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_mismatched_formats</span>
+      <span class="test-desc">.docx vs .pptx → MismatchedFormats error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_unknown_format</span>
+      <span class="test-desc">.txt extension → UnknownFormat error</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>2. Word (.docx) Tests</h2>
+
+<!-- WORD EXTRACT -->
+<div class="module">
+  <div class="module-header">
+    <h4>📝 Word Text & Structured Extraction <span class="test-count">5 tests</span></h4>
+    <span class="file-path">src/word/extract.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Approach 1a — Plain text extraction</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_simple_paragraph</span>
+      <span class="test-desc">Single paragraph → extracted text</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_multiple_paragraphs</span>
+      <span class="test-desc">Multi-paragraph document → newline-separated output</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_mixed_paragraphs_and_table</span>
+      <span class="test-desc">Paragraph → table → paragraph; validates depth tracking (regression guard)</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Approach 1b — Structured model extraction</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_document_structured</span>
+      <span class="test-desc">XML → WordDocument model with paragraphs + styles</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_document_with_table</span>
+      <span class="test-desc">XML → WordDocument model with parsed table rows/cells</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- WORD COMPARE -->
+<div class="module">
+  <div class="module-header">
+    <h4>🧠 Word Semantic Comparison (Approach 3) <span class="test-count">6 tests</span></h4>
+    <span class="file-path">src/word/compare.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-name">test_identical_documents_no_changes</span>
+      <span class="test-desc">Identical XML → all sections Unchanged</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_text_change_detected</span>
+      <span class="test-desc">"Hello left" → "Hello right" → Modified detected</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_added_paragraph</span>
+      <span class="test-desc">Right has extra paragraph → Added section</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_heading_detected</span>
+      <span class="test-desc">Paragraph with Heading1 style → WordHeading kind</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_table_cell_change</span>
+      <span class="test-desc">Table cell content change → cell-level atomic diff</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_serialize_sections</span>
+      <span class="test-desc">Vec&lt;OfficeSectionDiff&gt; ↔ JSON round-trip</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- WORD XML DIFF -->
+<div class="module">
+  <div class="module-header">
+    <h4>🌲 Word XML Tree Diff (Approach 2) <span class="test-count">5 tests</span></h4>
+    <span class="file-path">src/word/xml_diff.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-name">test_identical_xml_no_changes</span>
+      <span class="test-desc">Identical XML → empty changes list</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_text_change_detected</span>
+      <span class="test-desc">Text content change → Modification reported with path</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_added_paragraph_detected</span>
+      <span class="test-desc">Extra <w:p> element → Addition reported</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_deleted_paragraph_detected</span>
+      <span class="test-desc">Missing <w:p> element → Deletion reported</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_serialize_result</span>
+      <span class="test-desc">XmlTreeDiffResult ↔ JSON round-trip</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>3. PowerPoint (.pptx) Tests</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>🎞️ PowerPoint Slide Text Extraction <span class="test-count">7 tests</span></h4>
+    <span class="file-path">src/powerpoint/extract.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Content extraction</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_with_title_and_body</span>
+      <span class="test-desc">Title + body shapes → labeled output [title] [body]</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_title_only</span>
+      <span class="test-desc">Slide with only a title shape → single label</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_multiple_paragraphs_in_body</span>
+      <span class="test-desc">Body shape with 3 <a:p> paragraphs → newline-separated</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_ctr_title</span>
+      <span class="test-desc">Center title (type="ctrTitle") → labeled [title]</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Edge cases</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_empty</span>
+      <span class="test-desc">Empty slide (no shapes) → empty string</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_with_picture_shape</span>
+      <span class="test-desc">Picture shape (<p:pic>) naturally skipped — no text inside</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_slide_formatted_runs</span>
+      <span class="test-desc">Multiple <a:r> elements in one paragraph → concatenated text</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+  <div style="padding:0.5rem 1.25rem 0.75rem; border-top:1px solid var(--border);">
+    <span class="status status-stub">⚠ COMPARE</span>
+    <span style="font-size:0.78rem; color:var(--text2); margin-left:0.5rem;">
+      <code>compare_presentations()</code> not yet implemented — returns stub warning
+    </span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>4. Excel (.xlsx) Tests</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>📊 Excel Worksheet Text Extraction <span class="test-count">8 tests</span></h4>
+    <span class="file-path">src/excel/extract.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Basic cell extraction</div>
+    <div class="test-row">
+      <span class="test-name">test_parse_col_ref</span>
+      <span class="test-desc">Column letter → index: A=0, B=1, Z=25</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_single_cell</span>
+      <span class="test-desc">Single inlineStr cell → "Hello"</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_multiple_cells_one_row</span>
+      <span class="test-desc">3 cells in one row → tab-separated</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_multiple_rows</span>
+      <span class="test-desc">3 rows with 2 cells each → newline-separated rows</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Edge cases</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_sparse_columns</span>
+      <span class="test-desc">Cells A1 and C1 (skip B1) → correct column alignment</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_empty_sheet</span>
+      <span class="test-desc">No <c> elements → empty output</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_numeric_cell_default_type</span>
+      <span class="test-desc">Numeric <v> cell (no t attr) → value extracted</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Mixed content</div>
+    <div class="test-row">
+      <span class="test-name">test_extract_mixed_inline_str_and_numeric</span>
+      <span class="test-desc">Row with inlineStr + numeric + no-t-attr cells</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_extract_skips_shared_strings_cell</span>
+      <span class="test-desc">t="s" cells gracefully skipped (no crash, incomplete output)</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+  <div style="padding:0.5rem 1.25rem 0.75rem; border-top:1px solid var(--border);">
+    <span class="status status-stub">⚠ COMPARE</span>
+    <span style="font-size:0.78rem; color:var(--text2); margin-left:0.5rem;">
+      <code>compare_workbooks()</code> not yet implemented — returns stub warning
+    </span>
+  </div>
+  <div style="padding:0.25rem 1.25rem 0.75rem;">
+    <span class="status status-stub">⚠ SST</span>
+    <span style="font-size:0.78rem; color:var(--text2); margin-left:0.5rem;">
+      Shared String Table parser not implemented — <code>t="s"</code> cells skipped
+    </span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>5. Integration Tests — Approaches Benchmark</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>🔬 Cross-Approach Comparison Runner <span class="test-count">12 tests</span> <span style="font-size:0.7rem;color:var(--text2);">(7 direct + 5 from common)</span></h4>
+    <span class="file-path">tests/approaches_bench.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Documented trade-off validation</div>
+    <div class="test-row">
+      <span class="test-name">approach_1_detects_text_change</span>
+      <span class="test-desc">A1: text extraction + diff-core detects content change</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">approach_1_misses_formatting_only_change</span>
+      <span class="test-desc">A1 limitation: bold→normal produces 0 text changes (verified!)</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">approach_2_detects_formatting_change</span>
+      <span class="test-desc">A2: XML tree diff catches formatting removal</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Semantic model validation</div>
+    <div class="test-row">
+      <span class="test-name">approach_3_gives_rich_semantic_output</span>
+      <span class="test-desc">A3: heading+2 body paras → 3 sections, correct kind/status</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">approach_3_detects_table_cell_changes</span>
+      <span class="test-desc">A3: table with modified cells → cell-level changes reported</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">approach_3_deserializes_to_json</span>
+      <span class="test-desc">A3 output → JSON → deserialize → identical sections (round-trip)</span>
+      <span class="layer layer-integration">INTEG</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+  <div style="padding:0.5rem 1.25rem 0.75rem; border-top:1px solid var(--border);">
+    <span class="status status-na">📊 REPORT</span>
+    <span style="font-size:0.78rem; color:var(--text2); margin-left:0.5rem;">
+      <code>compare_all_approaches</code> — formatted print test (5 scenarios, non-asserting). Run with <code>-- --nocapture</code>.
+    </span>
+  </div>
+  <div style="padding:0.35rem 1.25rem 0.75rem;">
+    <span style="font-size:0.74rem; color:var(--text2);">
+      📎 The 12-test count includes 5 <code>tests/common/mod.rs</code> self-tests (<code>test_col_to_letter</code>, <code>test_generate_*_is_valid_zip</code>, <code>test_docx_body_content_roundtrip</code>) which run via <code>mod common</code>.
+    </span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>6. Fixture Tests — Full Disk Pipeline</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>📁 Fixture-Driven Disk Tests <span class="test-count">16 tests</span> <span style="font-size:0.7rem;color:var(--text2);">(11 direct + 5 from common)</span></h4>
+    <span class="file-path">tests/fixture_cases.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Format detection from disk</div>
+    <div class="test-row">
+      <span class="test-name">fixture_format_detection_is_correct</span>
+      <span class="test-desc">All 3 fixture dirs → correct OfficeFormat detected from disk</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Zip unpacking from disk</div>
+    <div class="test-row">
+      <span class="test-name">fixture_zip_unpacking_reads_expected_parts</span>
+      <span class="test-desc">DOCX → [Content_Types].xml, _rels/.rels, word/document.xml present</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_pptx_unpacking_reads_slide_content</span>
+      <span class="test-desc">PPTX → ppt/presentation.xml + ppt/slides/slide1.xml + title text</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_xlsx_unpacking_reads_sheet_content</span>
+      <span class="test-desc">XLSX → xl/workbook.xml + xl/worksheets/sheet1.xml + cell data</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">compare_office_files pipeline</div>
+    <div class="test-row">
+      <span class="test-name">fixture_compare_office_files_phase1_stub</span>
+      <span class="test-desc">All 3 formats → Word returns real results; PPTX/XLSX return stub warning</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Error path tests</div>
+    <div class="test-row">
+      <span class="test-name">fixture_mismatched_formats_error</span>
+      <span class="test-desc">.docx vs .pptx → MismatchedFormats error</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_unknown_format_error</span>
+      <span class="test-desc">.txt file → UnknownFormat error</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_corrupt_zip_detection</span>
+      <span class="test-desc">Non-zip bytes → InvalidZip error</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-group-label">Content verification across left/right pairs</div>
+    <div class="test-row">
+      <span class="test-name">fixture_docx_left_and_right_have_known_diff</span>
+      <span class="test-desc">left.docx ⊃ "left file", right.docx ⊃ "right file" — exclusive</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_pptx_title_diff_is_present</span>
+      <span class="test-desc">left.pptx ⊃ "Left Title", right.pptx ⊃ "Right Title"</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">fixture_xlsx_cell_diff_is_present</span>
+      <span class="test-desc">left.xlsx ⊃ "left value", right.xlsx ⊃ "right value", shared cells match</span>
+      <span class="layer layer-fixture">FIXT</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+  <div style="padding:0.35rem 1.25rem 0.75rem; border-top:1px solid var(--border);">
+    <span style="font-size:0.74rem; color:var(--text2);">
+      📎 The 16-test count includes 5 <code>tests/common/mod.rs</code> self-tests (listed in Section 7) which run via <code>mod common</code>.
+    </span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>7. Test Infrastructure — Helpers & Fixture Generators</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>🛠️ Test Common Module <span class="test-count">5 tests</span></h4>
+    <span class="file-path">tests/common/mod.rs</span>
+  </div>
+  <div class="test-list">
+    <div class="test-group-label">Fixture generation validity</div>
+    <div class="test-row">
+      <span class="test-name">test_col_to_letter</span>
+      <span class="test-desc">Column index → Excel letter: 0=A, 25=Z, 26=AA, 701=ZZ</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_generate_docx_is_valid_zip</span>
+      <span class="test-desc">Generated docx bytes → valid zip archive</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_generate_pptx_is_valid_zip</span>
+      <span class="test-desc">Generated pptx bytes → valid zip archive</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_generate_xlsx_is_valid_zip</span>
+      <span class="test-desc">Generated xlsx bytes → valid zip archive</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+    <div class="test-row">
+      <span class="test-name">test_docx_body_content_roundtrip</span>
+      <span class="test-desc">Body XML → generate_docx → extract word/document.xml → original XML</span>
+      <span class="status status-pass">PASS</span>
+    </div>
+  </div>
+  <div style="padding:0.5rem 1.25rem 0.75rem; border-top:1px solid var(--border);">
+    <span style="font-size:0.78rem; color:var(--text2);">
+      📦 Also provides 20+ XML body templates: <code>docx_left_body()</code>, <code>docx_body_with_table_data()</code>,
+      <code>pptx_slide_with_title()</code>, <code>xlsx_sheet_with_cells()</code>, and more.
+      Templates are the single source of truth for test fixture content.
+    </span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>8. Test Coverage Summary</h2>
+
+<div class="module" style="background: rgba(96,165,250,0.04); border-color: rgba(96,165,250,0.15);">
+  <div class="module-header" style="background: rgba(96,165,250,0.06);">
+    <h4>📊 By Feature Area</h4>
+  </div>
+  <div class="test-list">
+    <div class="test-row">
+      <span class="test-desc" style="grid-column:1/-1;"><strong style="color:var(--green);">✅ Fully tested:</strong> Format detection, zip unpacking + safety limits, XML reader config, serialization round-trips, Word extraction (text + structured), Word semantic comparison (identical, changed, added, headings, tables, serialization), Word XML tree diff (5 cases), PowerPoint extraction (7 cases including empty, pictures, formatted runs), Excel extraction (8 cases including sparse cols, mixed types, numeric, shared-string skip)</span>
+    </div>
+    <div class="test-row">
+      <span class="test-desc" style="grid-column:1/-1;"><strong style="color:var(--amber);">⚠️ Stubbed:</strong> PowerPoint semantic comparison, Excel semantic comparison, Excel shared string table resolution, tracked changes filtering, whitespace preservation (<code>xml:space</code>)</span>
+    </div>
+    <div class="test-row">
+      <span class="test-desc" style="grid-column:1/-1;"><strong style="color:var(--red);">❌ Gap:</strong> Deleted paragraph comparison (<code>compare.rs</code>), formula cells, Unicode edge cases, path traversal in zip entries, billion-laughs XML entity test, paragraph reordering, merged cells</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<h2>9. Quick Reference — Test Commands</h2>
+
+<div class="module">
+  <div class="module-header">
+    <h4>⚡ Run Commands</h4>
+  </div>
+  <div style="padding:1rem 1.25rem;">
+    <pre style="margin:0;"><code># All 82 tests
+cargo test -p office-adapter
+
+# Unit tests only (54)
+cargo test -p office-adapter --lib
+
+# Integration tests (12)
+cargo test -p office-adapter --test approaches_bench
+
+# Fixture tests (16)
+cargo test -p office-adapter --test fixture_cases
+
+# With formatted approach comparison output
+cargo test -p office-adapter --test approaches_bench -- --nocapture
+
+# Single test
+cargo test -p office-adapter test_extract_mixed_paragraphs_and_table
+
+# Regenerate fixture binaries (delete first)
+rm fixtures/cases/office-word-basic/left.docx
+cargo test -p office-adapter --test fixture_cases
+
+# Full project check
+./scripts/check.sh</code></pre>
+  </div>
+</div>
+
+<div class="footer">
+  <p>
+    Generated from <code>crates/office-adapter/</code> test suite — May 2025<br>
+    <a href="testing-approach.md">📖 Testing Approach Document</a> ·
+    <a href="index.html">🔬 Research Report</a> ·
+    <a href="HANDOFF.md">📤 Handoff</a>
+  </p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,158 @@
+---
+source: crates/diff-cli/tests/cli.rs
+expression: stdout
+---
+{
+  "files": [
+    {
+      "left": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/multi-hunk/left.txt",
+      "right": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/multi-hunk/right.txt",
+      "hunks": [
+        {
+          "old_range": {
+            "start": 1,
+            "len": 5
+          },
+          "new_range": {
+            "start": 1,
+            "len": 5
+          },
+          "lines": [
+            {
+              "kind": "context",
+              "old_no": 1,
+              "new_no": 1,
+              "text": "01 alpha",
+              "intra_spans": []
+            },
+            {
+              "kind": "deletion",
+              "old_no": 2,
+              "new_no": null,
+              "text": "02 beta",
+              "intra_spans": [
+                {
+                  "start": 3,
+                  "len": 4
+                }
+              ]
+            },
+            {
+              "kind": "addition",
+              "old_no": null,
+              "new_no": 2,
+              "text": "02 MUCH BETTER",
+              "intra_spans": [
+                {
+                  "start": 3,
+                  "len": 11
+                }
+              ]
+            },
+            {
+              "kind": "context",
+              "old_no": 3,
+              "new_no": 3,
+              "text": "03 gamma",
+              "intra_spans": []
+            },
+            {
+              "kind": "context",
+              "old_no": 4,
+              "new_no": 4,
+              "text": "04 delta",
+              "intra_spans": []
+            },
+            {
+              "kind": "context",
+              "old_no": 5,
+              "new_no": 5,
+              "text": "05 epsilon",
+              "intra_spans": []
+            }
+          ],
+          "foldable_context": true
+        },
+        {
+          "old_range": {
+            "start": 9,
+            "len": 6
+          },
+          "new_range": {
+            "start": 9,
+            "len": 6
+          },
+          "lines": [
+            {
+              "kind": "context",
+              "old_no": 9,
+              "new_no": 9,
+              "text": "09 iota",
+              "intra_spans": []
+            },
+            {
+              "kind": "context",
+              "old_no": 10,
+              "new_no": 10,
+              "text": "10 kappa",
+              "intra_spans": []
+            },
+            {
+              "kind": "context",
+              "old_no": 11,
+              "new_no": 11,
+              "text": "11 lambda",
+              "intra_spans": []
+            },
+            {
+              "kind": "deletion",
+              "old_no": 12,
+              "new_no": null,
+              "text": "12 mu",
+              "intra_spans": [
+                {
+                  "start": 3,
+                  "len": 2
+                }
+              ]
+            },
+            {
+              "kind": "addition",
+              "old_no": null,
+              "new_no": 12,
+              "text": "12 MUCH WORSE",
+              "intra_spans": [
+                {
+                  "start": 3,
+                  "len": 10
+                }
+              ]
+            },
+            {
+              "kind": "context",
+              "old_no": 13,
+              "new_no": 13,
+              "text": "13 nu",
+              "intra_spans": []
+            },
+            {
+              "kind": "context",
+              "old_no": 14,
+              "new_no": 14,
+              "text": "14 xi",
+              "intra_spans": []
+            }
+          ],
+          "foldable_context": true
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "additions": 2,
+    "deletions": 2,
+    "unchanged": 12
+  },
+  "warnings": [],
+  "truncated": false
+}
