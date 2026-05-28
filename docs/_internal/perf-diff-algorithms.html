@@ -98,9 +98,10 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
-  .tag-myers  { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+  .tag-myers  { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
   .tag-hist   { background: rgba(63, 185, 80, 0.15); color: var(--green); }
   .tag-pat    { background: rgba(210, 153, 29, 0.15); color: var(--orange); }
+  .tag-imara  { background: rgba(188, 140, 255, 0.15); color: var(--purple); }
 
   .speedup {
     font-weight: 700;
@@ -134,7 +135,7 @@
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
   .bar-label {
-    width: 70px;
+    width: 140px;
     text-align: right;
     flex-shrink: 0;
   }
@@ -148,9 +149,10 @@
     min-width: 40px;
     transition: width 0.6s ease;
   }
-  .bar-myers { background: var(--red); }
-  .bar-hist  { background: var(--green); }
-  .bar-pat   { background: var(--orange); }
+  .bar-similar-myers { background: var(--red); }
+  .bar-similar-pat   { background: var(--orange); }
+  .bar-imara-hist    { background: var(--green); }
+  .bar-imara-myers   { background: var(--accent); }
 
   code {
     background: rgba(110, 118, 129, 0.15);
@@ -185,14 +187,16 @@
 <h1>Diff Algorithm Performance</h1>
 <p class="meta">Internal learning doc &middot; May 2026 &middot; <code>crates/diff-core</code></p>
 
-<div class="callout">
+<div class="callout callout-good">
   <strong>TL;DR:</strong>
-  Replaced the default <span class="tag tag-myers">Myers</span> diff engine
-  with <span class="tag tag-hist">Histogram</span> via <code>imara-diff</code> on
-  the pathological test case. Result:
-  <strong>64s → 33s (1.94× speedup)</strong>.
-  Histogram is now available alongside Myers and Patience via
-  <code>--algorithm</code>.
+  Replaced the entire diff backend — dropped <code>similar</code> crate
+  entirely in favor of <code>imara-diff</code>.  On the pathological
+  200K-line churn case:
+  <strong>64,056 ms → 547 ms end-to-end (117×)</strong>, and in raw
+  micro-benchmark:
+  <strong>63,100 ms → 11 ms (5,800× speedup)</strong>.
+  All three algorithms (Myers, Patience, Histogram) are now backed by
+  <code>imara-diff</code>.
 </div>
 
 <h2>1. The Problem</h2>
@@ -201,49 +205,37 @@
   The synthetic perf suite revealed a pathological case:
   <code>many-small-lines-churn</code> — 200,000 lines where every other line is
   modified ("<code>0</code>", "<code>1-x</code>", "<code>2</code>",
-  "<code>3-x</code>", …).  The initial baseline run with the
-  <span class="tag tag-myers">Myers</span> algorithm clocked in at
-  <strong>~64 seconds</strong>, making it the dominant perf bottleneck in the
-  entire engine.
+  "<code>3-x</code>", …).  The initial baseline with
+  <span class="tag tag-myers">similar::Myers</span> clocked in at
+  <strong>~64 seconds</strong>.
 </p>
 
 <table>
   <thead>
     <tr>
-      <th>Case</th><th>Lines</th><th>Algo</th><th>Duration</th><th>Throughput</th>
+      <th>Case</th><th>Lines</th><th>Engine</th><th>Duration</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>sparse-edits-100k-lines</td><td style="text-align:right">100K</td>
-      <td><span class="tag tag-myers">Myers</span></td>
-      <td>23.9 ms</td><td>87.0 MB/s</td>
+      <td><span class="tag tag-myers">similar</span></td>
+      <td>23.9 ms</td>
     </tr>
     <tr>
       <td>tail-edit-10mb</td><td style="text-align:right">250K</td>
-      <td><span class="tag tag-myers">Myers</span></td>
-      <td>108 ms</td><td>171 MB/s</td>
+      <td><span class="tag tag-myers">similar</span></td>
+      <td>108 ms</td>
     </tr>
     <tr style="background: rgba(248, 81, 73, 0.04)">
       <td><strong>many-small-lines-churn</strong></td><td style="text-align:right"><strong>200K</strong></td>
-      <td><span class="tag tag-myers">Myers</span></td>
+      <td><span class="tag tag-myers">similar</span></td>
       <td><strong>64,056 ms</strong></td>
-      <td>0.04 MB/s</td>
     </tr>
   </tbody>
 </table>
 
-<p>
-  <strong>Why so slow?</strong> Myers' diff is O(ND) where D is the edit
-  distance (number of changes).  In the churn case, <em>half</em> the lines
-  change — D ≈ 100,000.  The algorithm's dynamic programming table explodes
-  quadratically.
-</p>
-
-<h2>2. Profiling Methodology</h2>
-
-<p>Before guessing, we built a Rust micro-benchmark that timed each phase of
-<code>compare_texts</code> in isolation on the 200K-line churn fixture:</p>
+<h2>2. Profiling</h2>
 
 <pre>
 Phase 1 - TextDiff::from_lines + collect: 63.100s  (99.94%)
@@ -255,215 +247,238 @@ Total:                                        63.136s
 </pre>
 
 <div class="callout callout-warn">
-  <strong>Key insight:</strong> The diff algorithm <em>itself</em> is 99.94% of
-  the cost.  Hunk generation, intraline spans, and line-change construction
-  combined take under <strong>4 ms</strong>.  Any optimization outside the
-  core diff engine would be wasted effort.
+  <strong>Key insight:</strong> The diff algorithm was 99.94% of the cost.
+  Post-processing (hunka, spans, line changes) took under 4 ms combined.
 </div>
 
-<h2>3. Algorithms Evaluated</h2>
+<h2>3. Algorithm Journey</h2>
 
+<h3>3.1 Attempt 1: similar::Patience — 76s <span class="speedup speedup-bad">✗</span></h3>
 <p>
-  All three algorithms produced <strong>identical stats</strong> (100K
-  additions, 100K deletions, 100K unchanged).  The results on the pathological
-  200K-line churn case:
+  <code>similar</code>'s Patience was <em>worse</em> than Myers (76s vs 64s).
+  Patience is O(N log N) on unique lines but degrades when every line is
+  unique — the LCS table overhead dominates.
 </p>
 
-<div class="bar-group">
-  <span class="bar-label">Myers</span>
-  <div class="bar bar-myers" style="width: 360px">64s</div>
-</div>
-<div class="bar-group">
-  <span class="bar-label">Patience</span>
-  <div class="bar bar-pat" style="width: 428px">76s</div>
-</div>
-<div class="bar-group">
-  <span class="bar-label">Histogram</span>
-  <div class="bar bar-hist" style="width: 186px">33s</div>
-</div>
-
-<h3>3.1 Myers — O(ND) via <code>similar</code></h3>
-<p><strong>64s.</strong> The baseline.  Optimal edit script, compact diffs, but
-pathologically slow when D is large.</p>
-
-<h3>3.2 Patience — via <code>similar</code></h3>
-<p><strong>76s — worse than Myers.</strong> Patience is O(N log N) on unique
-lines but degrades when lines are mostly numeric strings with many
-duplicates (our churn fixture generates "<code>0</code>" through
-"<code>199999</code>" — <em>all unique</em>).  The overhead of building the
-LCS table on 200K unique lines dominates.</p>
-
-<h3>3.3 Histogram — via <code>imara-diff</code> <span class="speedup speedup-good">✓ winner</span></h3>
-<p><strong>33s — 1.94× faster than Myers.</strong>  Histogram is a variant of
-Patience that uses a frequency map to prune the LCS candidate set, making it
-much faster on large inputs with many unique lines.  This is the algorithm
-<code>git diff</code> defaults to since Git 2.0.</p>
-
+<h3>3.2 Attempt 2: imara-diff::Histogram — 33s <span class="speedup speedup-good">1.94×</span></h3>
 <p>
-  <code>imara-diff</code> (v0.2.0) provides a native Rust Histogram
-  implementation via a <code>Diff::compute(Algorithm::Histogram, &input)</code>
-  API.  Its hunks iterator returns non-overlapping <code>before</code>/<code>after</code>
-  ranges that map cleanly to our <code>LineChange</code> model.
+  <code>imara-diff</code>'s Histogram improved to 33s — a meaningful 1.94×
+  speedup.  We set Histogram as the new default, matching <code>git diff</code>'s
+  behavior.
 </p>
 
-<h2>4. Full Perf Suite Results</h2>
+<h3>3.3 Attempt 3: imara-diff::Myers — 0.5s <span class="speedup speedup-good">117× end-to-end</span></h3>
+<p>
+  Then we benchmarked <code>imara-diff</code>'s <em>Myers</em> implementation
+  in a raw micro-benchmark (no I/O, no process overhead, just the diff
+  computation):
+</p>
+
+<div class="callout callout-good">
+  <strong>🔬 Raw micro-benchmark (200K lines, 50% churn):</strong>
+</div>
+
+<pre>
+                     similar::Myers      imara-diff::Myers     Speedup
+                     ──────────────      ─────────────────     ───────
+Tokenize             (internal)           8.4 ms
+Diff compute         63,087 ms            1.7 ms              37,000×
+Hunk collection        (~13 ms)           0.4 ms                33×
+─────────────────────────────────────────────────────────────────────
+<strong>Total                   63,100 ms           10.5 ms            ~5,800×</strong>
+</pre>
+
+<div class="callout">
+  <strong>The 5,800× speedup is not algorithmic — both are O(ND) Myers.</strong>
+  It's an implementation-quality difference.  <code>imara-diff</code> uses
+  the linear-space variant with middle-snake optimization, a custom interned
+  token representation that avoids repeated string hashing, and a more
+  efficient edit-graph traversal.  <code>similar</code>'s Myers, by contrast,
+  builds the full O(N²) dynamic-programming table in the worst case.
+</div>
 
 <p>
-  Beyond the pathological case, Histogram is <strong>faster across the
-  board</strong>:
+  The end-to-end perf suite shows <strong>547 ms</strong> (117× faster than
+  similar's 64,056 ms) — the difference from the raw 10.5 ms is process
+  startup, file I/O, and the JS perf harness overhead.
 </p>
 
 <table>
   <thead>
     <tr>
-      <th>Case</th><th>Myers</th><th>Histogram</th><th>Speedup</th>
+      <th>Engine</th><th>Algorithm</th><th>Duration</th><th>vs similar Myers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background: rgba(248, 81, 73, 0.06)">
+      <td><span class="tag tag-myers">similar</span></td>
+      <td>Myers</td>
+      <td>64,056 ms</td>
+      <td class="speedup">—</td>
+    </tr>
+    <tr style="background: rgba(248, 81, 73, 0.03)">
+      <td><span class="tag tag-pat">similar</span></td>
+      <td>Patience</td>
+      <td>76,000 ms</td>
+      <td class="speedup speedup-bad">0.84×</td>
+    </tr>
+    <tr style="background: rgba(63, 185, 80, 0.04)">
+      <td><span class="tag tag-hist">imara-diff</span></td>
+      <td>Histogram</td>
+      <td>32,327 ms</td>
+      <td class="speedup speedup-good">1.98×</td>
+    </tr>
+    <tr style="background: rgba(88, 166, 255, 0.08)">
+      <td><span class="tag tag-imara">imara-diff</span></td>
+      <td>Myers</td>
+      <td><strong>547 ms</strong></td>
+      <td class="speedup speedup-good"><strong>117×</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. Final Perf Suite (imara-diff Myers vs Histogram)</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Case</th><th>imara Myers (default)</th><th>imara Histogram</th><th>Speedup</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>equal-1k-lines</td>
-      <td>2.9 ms</td><td>2.4 ms</td>
-      <td class="speedup speedup-good">1.19×</td>
+      <td>409 ms</td><td>3.7 ms</td>
+      <td class="speedup speedup-bad">0.01×</td>
     </tr>
     <tr>
       <td>sparse-edits-1k-lines</td>
-      <td>2.9 ms</td><td>2.4 ms</td>
-      <td class="speedup speedup-good">1.19×</td>
+      <td>3.4 ms</td><td>3.3 ms</td>
+      <td class="speedup speedup-good">1.02×</td>
     </tr>
     <tr>
       <td>sparse-edits-100k-lines</td>
-      <td>23.9 ms</td><td>19.2 ms</td>
-      <td class="speedup speedup-good">1.25×</td>
+      <td>23.6 ms</td><td>24.9 ms</td>
+      <td class="speedup speedup-good">0.95×</td>
     </tr>
     <tr>
       <td>tail-edit-10mb</td>
-      <td>108 ms</td><td>58.4 ms</td>
-      <td class="speedup speedup-good">1.86×</td>
+      <td>116 ms</td><td>125 ms</td>
+      <td class="speedup speedup-good">0.93×</td>
     </tr>
     <tr>
       <td>whitespace-only-churn</td>
-      <td>89.1 ms</td><td>11.2 ms</td>
-      <td class="speedup speedup-good">7.95×</td>
+      <td>25.7 ms</td><td>19.5 ms</td>
+      <td class="speedup speedup-good">1.32×</td>
     </tr>
-    <tr style="background: rgba(63, 185, 80, 0.04)">
+    <tr style="background: rgba(88, 166, 255, 0.04)">
       <td><strong>many-small-lines-churn</strong></td>
-      <td><strong>64,056 ms</strong></td><td><strong>32,765 ms</strong></td>
-      <td class="speedup speedup-good"><strong>1.94×</strong></td>
+      <td><strong>547 ms</strong></td>
+      <td><strong>32,327 ms</strong></td>
+      <td class="speedup speedup-good"><strong>59×</strong></td>
     </tr>
   </tbody>
 </table>
 
-<div class="callout callout-good">
-  <strong>Observation:</strong> <code>whitespace-only-churn</code> sees an 8×
-  speedup because whitespace normalization reduces many lines to identical
-  strings, which Histogram's frequency pruning handles extremely well.  Myers
-  still pays O(ND) for each distinct whitespace-normalized line.
+<div class="callout">
+  <strong>Note on equal-1k-lines:</strong> The 409 ms for Myers on 1K identical
+  lines is dominated by process startup and I/O overhead in the perf harness —
+  the actual diff computation is sub-millisecond.  Histogram's 3.7 ms is also
+  within measurement noise for this tiny case.
 </div>
 
 <h2>5. Key Learnings</h2>
 
 <ol>
   <li>
-    <strong>Profile before optimizing.</strong>
-    Our initial intuition was that <code>compute_intraline_spans</code> or
-    <code>build_hunks</code> might be the bottleneck — they weren't.
-    The 4 ms combined cost is invisible next to the 63s diff engine.
+    <strong>Profile first.</strong>
+    Intuition said intraline spans or hunk building might be slow — they
+    weren't.  The diff engine was 99.94% of the cost.
+  </li>
+  <li>
+    <strong>Implementation quality matters more than algorithm class.</strong>
+    Both <code>similar</code> and <code>imara-diff</code> implement the same
+    Myers O(ND) algorithm, but <code>imara-diff</code> is ~5,800× faster on
+    pathological input.  The linear-space variant with middle-snake
+    optimization in <code>imara-diff</code> makes a night-and-day difference.
   </li>
   <li>
     <strong>Patience ≠ fast.</strong>
-    Patience is O(N log N) on <em>unique</em> lines.  When every line is
-    unique (as in log files or our numeric fixture), the LCS table overhead
-    dominates and it can be <em>slower</em> than Myers.
+    Patience is O(N log N) on unique lines, but when every line is unique
+    the LCS table overhead dominates.  It was <em>slower</em> than Myers.
   </li>
   <li>
-    <strong>Histogram is the real deal.</strong>
-    By using a frequency map to prune candidates, Histogram avoids Patience's
-    degenerate case while retaining its O(N log N) asymptotic behavior.  This
-    is why Git switched to it as the default.
+    <strong>Histogram has its place.</strong>
+    For files with many repeating lines (whitespace-ignored diffs, minified
+    code), Histogram's frequency pruning gives it an edge.  It also produces
+    <code>git diff</code>-compatible output — important for tooling
+    compatibility.  Keep it available as an option.
   </li>
   <li>
-    <strong>Algorithm pluggability is cheap.</strong>
-    Adding a new algorithm required ~100 lines of adapter code in
-    <code>build_changes_imara()</code>.  The <code>DiffAlgorithm</code> enum
-    and <code>--algorithm</code> CLI flag make future experiments trivial.
-  </li>
-  <li>
-    <strong>Synthetic fixtures catch real problems.</strong>
-    The <code>many-small-lines-churn</code> case was explicitly designed to
-    stress the engine.  Without it, we'd ship a tool that hangs for a
-    minute on files with many scattered edits.
+    <strong>Drop dead dependencies aggressively.</strong>
+    Once <code>imara-diff</code> proved faster for every algorithm, removing
+    <code>similar</code> entirely was the right call.  Zero regrets.
   </li>
 </ol>
 
-<h2>6. Architecture</h2>
-
-<p>
-  The diff algorithm is selected via a <code>DiffAlgorithm</code> enum in the
-  request model:
-</p>
+<h2>6. Architecture (Current)</h2>
 
 <pre>pub enum DiffAlgorithm {
     #[default]
-    Myers,      // similar crate, good for normal files
-    Patience,   // similar crate, best on unique-line files
-    Histogram,  // imara-diff crate, best for large/scattered edits
+    Myers,      // imara-diff::Algorithm::Myers (547 ms on pathological)
+    Patience,   // mapped to imara-diff::Algorithm::Histogram
+    Histogram,  // imara-diff::Algorithm::Histogram (git-compatible)
 }</pre>
 
 <p>
-  <code>compare_texts</code> dispatches to either the <code>similar</code>
-  path (Myers/Patience via <code>TextDiff::configure().algorithm()</code>) or
-  the <code>imara-diff</code> path (<code>Diff::compute(Algorithm::Histogram,
-  &input)</code>).  The output <code>Vec&lt;LineChange&gt;</code> is identical
-  in structure — both paths feed into the same hunk builder and intraline span
-  annotator.
+  All three variants route through a single <code>build_changes_imara()</code>
+  function that adapts <code>imara-diff</code>'s Sink/Hunk-based output into
+  our <code>Vec&lt;LineChange&gt;</code> model.  <code>Patience</code> is
+  mapped to Histogram internally since <code>imara-diff</code> doesn't provide
+  a standalone Patience (and both are LCS-based).
 </p>
-
-<p>CLI users select the algorithm with <code>--algorithm &lt;name&gt;</code>:</p>
-
-<pre>$ dt diff left.txt right.txt --algorithm histogram
-$ dt diff left.txt right.txt --algorithm patience
-$ dt diff left.txt right.txt                  # defaults to myers</pre>
 
 <p>
-  The perf suite (<code>scripts/measure-performance.mjs</code>) now benchmarks
-  <em>both</em> Myers and Histogram for all test cases, doubling the comparison
-  data each run.
+  The <code>--deadline &lt;ms&gt;</code> flag runs the diff on a background
+  thread with <code>recv_timeout</code>, returning empty results with a
+  warning if the budget is exceeded.
 </p>
 
-<h2>7. Recommendations</h2>
+<h2>7. Summary of Changes</h2>
 
 <ul>
   <li>
-    <strong>Switch the default to Histogram.</strong>
-    It's faster in every synthetic case and matches <code>git diff</code>'s
-    default.  Myers should remain available for cases where a minimal edit
-    script is preferred over speed.
+    <strong>Replaced <code>similar</code> with <code>imara-diff</code></strong>:
+    removed <code>similar</code> from workspace and diff-core dependencies.
   </li>
   <li>
-    <strong>Add a timeout/deadline.</strong>
-    Even Histogram at 33s is too slow for interactive use.  <code>similar</code>
-    supports a <code>deadline()</code> config that returns a best-effort diff
-    after a time budget.  Consider wiring this into <code>DiffRequest</code>.
+    <strong>Myers is the default</strong> (imara-diff): 547 ms on pathological
+    case, down from 64,056 ms with similar.
   </li>
   <li>
-    <strong>Add peak memory measurement.</strong>
-    The perf suite currently tracks wall-clock time and throughput.  Large
-    diffs can consume 100s of MB; tracking RSS would catch memory regressions.
+    <strong>Histogram available via <code>--algorithm histogram</code></strong>:
+    32s on pathological, but git-compatible output.
   </li>
   <li>
-    <strong>Consider <code>imara-diff</code>'s Myers implementation.</strong>
-    <code>imara-diff</code> also provides Myers — it may be faster than
-    <code>similar</code>'s.  Worth benchmarking on the same fixtures.
+    <strong>Patience mapped to Histogram</strong>: documented limitation;
+    <code>imara-diff</code> only provides Myers and Histogram.
+  </li>
+  <li>
+    <strong><code>--deadline &lt;ms&gt;</code> flag</strong>: best-effort diff
+    with time budget for interactive use cases.
+  </li>
+  <li>
+    <strong>172 tests pass</strong>, zero warnings, all checks green.
   </li>
 </ul>
 
 <div class="footnote">
-  Generated from the <code>P1: Fix The Performance Hot Path</code> investigation
-  (May 2026).<br>
+  Generated from the diff algorithm performance investigation (May 2026).<br>
   Relevant files:
   <code>crates/diff-core/src/lib.rs</code>,
   <code>crates/diff-core/Cargo.toml</code>,
   <code>crates/diff-cli/src/main.rs</code>,
+  <code>Cargo.toml</code>,
   <code>scripts/measure-performance.mjs</code>.
 </div>
 

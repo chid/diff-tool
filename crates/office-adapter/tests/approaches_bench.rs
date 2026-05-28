@@ -222,6 +222,7 @@ fn run_approach_1(
         3,
         Vec::new(),
         DiffAlgorithm::Myers,
+        None,
     ))
 }
 

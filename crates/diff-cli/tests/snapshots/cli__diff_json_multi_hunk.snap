@@ -1,5 +1,6 @@
 ---
 source: crates/diff-cli/tests/cli.rs
+assertion_line: 170
 expression: stdout
 ---
 {

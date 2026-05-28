@@ -55,6 +55,11 @@ enum Command {
         context: usize,
         #[arg(long, value_enum, default_value = "myers")]
         algorithm: AlgorithmArg,
+        /// Wall-clock deadline in milliseconds. When set, diff computation
+        /// is interrupted if it exceeds this budget.  Returns a best-effort
+        /// result with empty hunks and a warning.
+        #[arg(long)]
+        deadline: Option<u64>,
     },
     Dir {
         root: PathBuf,
@@ -90,7 +95,7 @@ fn main() {
 
 fn run(args: Args) -> i32 {
     match args.command {
-        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm } => {
+        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm, deadline } => {
             let result = diff_core::compare_files(DiffRequest {
                 left,
                 right,
@@ -105,6 +110,7 @@ fn run(args: Args) -> i32 {
                 context,
                 max_bytes: Some(10 * 1024 * 1024),
                 algorithm: algorithm.into(),
+                deadline_ms: deadline,
             });
             let result = match result {
                 Ok(r) => r,

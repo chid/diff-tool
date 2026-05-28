@@ -20,6 +20,7 @@ fn compare_files(request: CompareFilesRequest) -> Result<diff_core::DiffResult, 
         context: 3,
         max_bytes: Some(10 * 1024 * 1024),
         algorithm: DiffAlgorithm::Myers,
+        deadline_ms: None,
     })
     .map_err(|error| error.to_string())
 }

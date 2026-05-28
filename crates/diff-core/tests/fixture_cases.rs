@@ -34,6 +34,7 @@ fn fixture_cases_match_expected_stats() {
             context: 3,
             max_bytes: None,
             algorithm: DiffAlgorithm::Myers,
+            deadline_ms: None,
         })
         .unwrap();
 
@@ -76,6 +77,7 @@ fn diff_result_json_shape_is_stable() {
         context: 3,
         max_bytes: None,
         algorithm: DiffAlgorithm::Myers,
+        deadline_ms: None,
     })
     .unwrap();
 
@@ -102,6 +104,7 @@ fn max_bytes_marks_truncated_results() {
         context: 3,
         max_bytes: Some(8),
         algorithm: DiffAlgorithm::Myers,
+        deadline_ms: None,
     })
     .unwrap();
 
