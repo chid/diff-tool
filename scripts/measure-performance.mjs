@@ -78,6 +78,7 @@ if (build.status !== 0) {
 }
 
 const binary = path.join(root, 'target', 'release', process.platform === 'win32' ? 'dt.exe' : 'dt');
+const algorithms = ['myers', 'histogram'];
 const results = [];
 for (const testCase of cases) {
   const dir = path.join(fixtureRoot, testCase.name);
@@ -88,36 +89,40 @@ for (const testCase of cases) {
   writeFileSync(leftPath, left);
   writeFileSync(rightPath, right);
 
-  const started = performance.now();
-  const run = spawnSync(binary, ['diff', leftPath, rightPath, '--json'], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 512 * 1024 * 1024,
-  });
-  const durationMs = performance.now() - started;
-  const leftBytes = Buffer.byteLength(left);
-  const rightBytes = Buffer.byteLength(right);
-  const totalMb = (leftBytes + rightBytes) / (1024 * 1024);
+  for (const algo of algorithms) {
+    const started = performance.now();
+    const args = ['diff', leftPath, rightPath, '--json', '--algorithm', algo];
+    const run = spawnSync(binary, args, {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 512 * 1024 * 1024,
+    });
+    const durationMs = performance.now() - started;
+    const leftBytes = Buffer.byteLength(left);
+    const rightBytes = Buffer.byteLength(right);
+    const totalMb = (leftBytes + rightBytes) / (1024 * 1024);
 
-  // dt diff returns exit 0 when files are identical, exit 1 when differences
-  // are found, and exit 2 on error.  Both 0 and 1 are successful executions.
-  let stats = null;
-  if (run.status === 0 || run.status === 1) {
-    stats = JSON.parse(run.stdout).stats;
+    // dt diff returns exit 0 when files are identical, exit 1 when differences
+    // are found, and exit 2 on error.  Both 0 and 1 are successful executions.
+    let stats = null;
+    if (run.status === 0 || run.status === 1) {
+      stats = JSON.parse(run.stdout).stats;
+    }
+
+    results.push({
+      name: `${testCase.name} [${algo}]`,
+      algorithm: algo,
+      left_bytes: leftBytes,
+      right_bytes: rightBytes,
+      left_lines: countLines(left),
+      right_lines: countLines(right),
+      duration_ms: Math.round(durationMs * 100) / 100,
+      throughput_mb_s: Math.round((totalMb / (durationMs / 1000)) * 100) / 100,
+      exit_code: run.status,
+      stats,
+      stderr: (run.status === 0 || run.status === 1) ? undefined : run.stderr.slice(0, 4000),
+    });
   }
-
-  results.push({
-    name: testCase.name,
-    left_bytes: leftBytes,
-    right_bytes: rightBytes,
-    left_lines: countLines(left),
-    right_lines: countLines(right),
-    duration_ms: Math.round(durationMs * 100) / 100,
-    throughput_mb_s: Math.round((totalMb / (durationMs / 1000)) * 100) / 100,
-    exit_code: run.status,
-    stats,
-    stderr: (run.status === 0 || run.status === 1) ? undefined : run.stderr.slice(0, 4000),
-  });
 }
 
 const report = {

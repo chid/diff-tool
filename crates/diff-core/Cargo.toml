@@ -5,6 +5,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
+imara-diff = "0.2.0"
 serde.workspace = true
 similar.workspace = true
 thiserror.workspace = true

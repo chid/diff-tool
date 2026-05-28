@@ -1,4 +1,4 @@
-use diff_core::{DiffMode, DiffRequest, IgnoreMode};
+use diff_core::{DiffAlgorithm, DiffMode, DiffRequest, IgnoreMode};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -33,6 +33,7 @@ fn fixture_cases_match_expected_stats() {
             ignore: meta.ignore,
             context: 3,
             max_bytes: None,
+            algorithm: DiffAlgorithm::Myers,
         })
         .unwrap();
 
@@ -74,6 +75,7 @@ fn diff_result_json_shape_is_stable() {
         ignore: IgnoreMode::None,
         context: 3,
         max_bytes: None,
+        algorithm: DiffAlgorithm::Myers,
     })
     .unwrap();
 
@@ -99,6 +101,7 @@ fn max_bytes_marks_truncated_results() {
         ignore: IgnoreMode::None,
         context: 3,
         max_bytes: Some(8),
+        algorithm: DiffAlgorithm::Myers,
     })
     .unwrap();
 

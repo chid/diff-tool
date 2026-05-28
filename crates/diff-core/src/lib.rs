@@ -14,8 +14,9 @@
 //! This policy matches the behaviour of `git diff` (which compares the index blob
 //! after `core.autocrlf` processing) and most modern diff tools.
 
+use imara_diff::InternedInput;
 use serde::{Deserialize, Serialize};
-use similar::{ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, TextDiff};
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -38,6 +39,25 @@ pub enum DiffMode {
     Split,
 }
 
+/// Diff algorithm to use when comparing text.
+///
+/// * **Myers** — standard O(ND) algorithm. Produces compact, readable diffs
+///   for most files. Can be slow on files with many scattered edits.
+/// * **Patience** — O(N log N) algorithm based on longest common subsequence
+///   of unique lines. Excels on files with many unique lines and scattered
+///   edits (e.g. log files, data files, minified code).
+/// * **Histogram** — variant of Patience that uses a histogram of line
+///   occurrences for faster matching. Generally the best choice for large
+///   files with many scattered edits; used by `git diff` by default.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum DiffAlgorithm {
+    #[default]
+    Myers,
+    Patience,
+    Histogram,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum IgnoreMode {
@@ -55,6 +75,8 @@ pub struct DiffRequest {
     pub ignore: IgnoreMode,
     pub context: usize,
     pub max_bytes: Option<u64>,
+    #[serde(default)]
+    pub algorithm: DiffAlgorithm,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -176,6 +198,7 @@ pub fn compare_files(request: DiffRequest) -> Result<DiffResult, DiffError> {
         left.truncated || right.truncated,
         request.context,
         warnings,
+        request.algorithm,
     ))
 }
 
@@ -188,6 +211,7 @@ pub fn compare_texts(
     truncated: bool,
     context: usize,
     warnings: Vec<String>,
+    algorithm: DiffAlgorithm,
 ) -> DiffResult {
     // Normalise line endings before any other processing so that CRLF and LF
     // files produce identical diffs regardless of which entry-point is used
@@ -199,63 +223,80 @@ pub fn compare_texts(
 
     let normalized_left = normalize_for_compare(left, ignore);
     let normalized_right = normalize_for_compare(right, ignore);
-    let diff = TextDiff::from_lines(&normalized_left, &normalized_right);
     let left_lines = split_lines_lossless(left);
     let right_lines = split_lines_lossless(right);
 
-    let mut stats = DiffStats {
-        additions: 0,
-        deletions: 0,
-        unchanged: 0,
-    };
-    let mut lines = Vec::new();
-    let mut old_no = 1usize;
-    let mut new_no = 1usize;
-    let mut left_idx = 0usize;
-    let mut right_idx = 0usize;
-
-    for change in diff.iter_all_changes() {
-        match change.tag() {
-            ChangeTag::Equal => {
-                stats.unchanged += 1;
-                lines.push(LineChange {
-                    kind: ChangeKind::Context,
-                    old_no: Some(old_no),
-                    new_no: Some(new_no),
-                    text: left_lines.get(left_idx).cloned().unwrap_or_default(),
-                    intra_spans: Vec::new(),
-                });
-                old_no += 1;
-                new_no += 1;
-                left_idx += 1;
-                right_idx += 1;
-            }
-            ChangeTag::Delete => {
-                stats.deletions += 1;
-                lines.push(LineChange {
-                    kind: ChangeKind::Deletion,
-                    old_no: Some(old_no),
-                    new_no: None,
-                    text: left_lines.get(left_idx).cloned().unwrap_or_default(),
-                    intra_spans: Vec::new(),
-                });
-                old_no += 1;
-                left_idx += 1;
-            }
-            ChangeTag::Insert => {
-                stats.additions += 1;
-                lines.push(LineChange {
-                    kind: ChangeKind::Addition,
-                    old_no: None,
-                    new_no: Some(new_no),
-                    text: right_lines.get(right_idx).cloned().unwrap_or_default(),
-                    intra_spans: Vec::new(),
-                });
-                new_no += 1;
-                right_idx += 1;
-            }
+    let (stats, mut lines) = match algorithm {
+        DiffAlgorithm::Histogram => {
+            build_changes_imara(&normalized_left, &normalized_right, &left_lines, &right_lines)
         }
-    }
+        DiffAlgorithm::Myers | DiffAlgorithm::Patience => {
+            let sim_algo = match algorithm {
+                DiffAlgorithm::Myers => Algorithm::Myers,
+                DiffAlgorithm::Patience => Algorithm::Patience,
+                DiffAlgorithm::Histogram => unreachable!(),
+            };
+            let diff = TextDiff::configure()
+                .algorithm(sim_algo)
+                .diff_lines(&normalized_left, &normalized_right);
+
+            let mut stats = DiffStats {
+                additions: 0,
+                deletions: 0,
+                unchanged: 0,
+            };
+            let mut lines = Vec::new();
+            let mut old_no = 1usize;
+            let mut new_no = 1usize;
+            let mut left_idx = 0usize;
+            let mut right_idx = 0usize;
+
+            for change in diff.iter_all_changes() {
+                match change.tag() {
+                    ChangeTag::Equal => {
+                        stats.unchanged += 1;
+                        lines.push(LineChange {
+                            kind: ChangeKind::Context,
+                            old_no: Some(old_no),
+                            new_no: Some(new_no),
+                            text: left_lines.get(left_idx).cloned().unwrap_or_default(),
+                            intra_spans: Vec::new(),
+                        });
+                        old_no += 1;
+                        new_no += 1;
+                        left_idx += 1;
+                        right_idx += 1;
+                    }
+                    ChangeTag::Delete => {
+                        stats.deletions += 1;
+                        lines.push(LineChange {
+                            kind: ChangeKind::Deletion,
+                            old_no: Some(old_no),
+                            new_no: None,
+                            text: left_lines.get(left_idx).cloned().unwrap_or_default(),
+                            intra_spans: Vec::new(),
+                        });
+                        old_no += 1;
+                        left_idx += 1;
+                    }
+                    ChangeTag::Insert => {
+                        stats.additions += 1;
+                        lines.push(LineChange {
+                            kind: ChangeKind::Addition,
+                            old_no: None,
+                            new_no: Some(new_no),
+                            text: right_lines.get(right_idx).cloned().unwrap_or_default(),
+                            intra_spans: Vec::new(),
+                        });
+                        new_no += 1;
+                        right_idx += 1;
+                    }
+                }
+            }
+
+            (stats, lines)
+        }
+    };
 
     // Annotate intraline (character-level) spans on adjacent delete/insert pairs.
     compute_intraline_spans(&mut lines);
@@ -293,6 +334,95 @@ fn normalize_for_compare(input: &str, ignore: IgnoreMode) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
     }
+}
+
+/// Build line changes using imara-diff's Histogram algorithm.
+///
+/// Unlike `similar`, imara-diff uses a Sink/Hunk-based API. This function
+/// adapts that output into the same `Vec<LineChange>` format that the rest
+/// of the pipeline expects.
+fn build_changes_imara(
+    normalized_left: &str,
+    normalized_right: &str,
+    left_lines: &[String],
+    right_lines: &[String],
+) -> (DiffStats, Vec<LineChange>) {
+    let input = InternedInput::new(normalized_left, normalized_right);
+    let diff = imara_diff::Diff::compute(imara_diff::Algorithm::Histogram, &input);
+
+    let mut stats = DiffStats {
+        additions: 0,
+        deletions: 0,
+        unchanged: 0,
+    };
+    let mut lines = Vec::new();
+    let mut old_cursor: u32 = 0;
+    let mut new_cursor: u32 = 0;
+
+    for hunk in diff.hunks() {
+        // Emit context lines between previous hunk and this one.
+        // old_cursor and new_cursor may differ after deletions/insertions,
+        // but the matching section between hunks advances both equally.
+        let ctx_len = hunk.before.start.saturating_sub(old_cursor);
+        for i in 0..ctx_len {
+            let old_idx = (old_cursor + i) as usize;
+            let new_idx = (new_cursor + i) as usize;
+            lines.push(LineChange {
+                kind: ChangeKind::Context,
+                old_no: Some(old_idx + 1),
+                new_no: Some(new_idx + 1),
+                text: left_lines.get(old_idx).cloned().unwrap_or_default(),
+                intra_spans: Vec::new(),
+            });
+            stats.unchanged += 1;
+        }
+        // Advance cursors past the context section. The next assignments
+        // (old_cursor = hunk.before.end, new_cursor = hunk.after.end)
+        // will capture the post-change positions.
+
+        // Emit deletions.
+        for i in hunk.before.clone() {
+            lines.push(LineChange {
+                kind: ChangeKind::Deletion,
+                old_no: Some(i as usize + 1),
+                new_no: None,
+                text: left_lines.get(i as usize).cloned().unwrap_or_default(),
+                intra_spans: Vec::new(),
+            });
+            stats.deletions += 1;
+        }
+        old_cursor = hunk.before.end;
+
+        // Emit additions.
+        for i in hunk.after.clone() {
+            lines.push(LineChange {
+                kind: ChangeKind::Addition,
+                old_no: None,
+                new_no: Some(i as usize + 1),
+                text: right_lines.get(i as usize).cloned().unwrap_or_default(),
+                intra_spans: Vec::new(),
+            });
+            stats.additions += 1;
+        }
+        new_cursor = hunk.after.end;
+    }
+
+    // Emit remaining context lines after the last hunk.
+    let remaining = (left_lines.len() as u32).saturating_sub(old_cursor);
+    for i in 0..remaining {
+        let old_idx = (old_cursor + i) as usize;
+        let new_idx = (new_cursor + i) as usize;
+        lines.push(LineChange {
+            kind: ChangeKind::Context,
+            old_no: Some(old_idx + 1),
+            new_no: Some(new_idx + 1),
+            text: left_lines.get(old_idx).cloned().unwrap_or_default(),
+            intra_spans: Vec::new(),
+        });
+        stats.unchanged += 1;
+    }
+
+    (stats, lines)
 }
 
 /// Split a flat list of line changes into context-aware hunks.
@@ -676,6 +806,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert_eq!(result.stats.additions, 1);
         assert_eq!(result.stats.deletions, 1);
@@ -693,6 +824,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert_eq!(result.stats.additions, 0);
         assert_eq!(result.stats.deletions, 0);
@@ -712,6 +844,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert_eq!(result.files[0].hunks.len(), 1, "changes close together produce 1 hunk");
         assert_eq!(result.stats.unchanged, 7);
@@ -733,6 +866,7 @@ mod tests {
             false,
             2,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert_eq!(result.files[0].hunks.len(), 2, "far-apart changes produce 2 hunks");
     }
@@ -748,6 +882,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert!(result.files[0].hunks.is_empty(), "identical files produce 0 hunks");
     }
@@ -763,6 +898,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert!(result.files[0].hunks.is_empty());
     }
@@ -780,6 +916,7 @@ mod tests {
             false,
             1,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let hunk = &result.files[0].hunks[0];
         // With context=1: line 1 (ctx), line 2 (del), line x (add), line 3 (ctx) = 4 lines
@@ -802,6 +939,7 @@ mod tests {
             false,
             2,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         // context=2, gap between changes at lines 2 and 10 = 7 lines > 4 → 2 hunks
         assert_eq!(result.files[0].hunks.len(), 2);
@@ -885,6 +1023,7 @@ mod tests {
             ignore: IgnoreMode::None,
             context: 3,
             max_bytes: None,
+            algorithm: DiffAlgorithm::Myers,
         });
         match result {
             Err(DiffError::BinaryFile { .. }) => {}
@@ -907,6 +1046,7 @@ mod tests {
             ignore: IgnoreMode::None,
             context: 3,
             max_bytes: None,
+            algorithm: DiffAlgorithm::Myers,
         });
         match result {
             Err(DiffError::BinaryFile { .. }) => {}
@@ -927,6 +1067,7 @@ mod tests {
             false,
             3,
             vec!["bad.txt contains invalid UTF-8".into()],
+            DiffAlgorithm::Myers,
         );
         assert!(
             result.warnings.iter().any(|w| w.contains("invalid UTF-8")),
@@ -946,6 +1087,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         assert!(result.warnings.is_empty());
     }
@@ -964,6 +1106,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1000,6 +1143,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1036,6 +1180,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1060,6 +1205,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1089,6 +1235,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let hunk = &result.files[0].hunks[0];
         let deletions: Vec<_> = hunk
@@ -1129,6 +1276,7 @@ mod tests {
             false,
             3,
             Vec::new(),
+            DiffAlgorithm::Myers,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1163,6 +1311,7 @@ mod tests {
             ignore: IgnoreMode::None,
             context: 3,
             max_bytes: None,
+            algorithm: DiffAlgorithm::Myers,
         })
         .unwrap();
 
@@ -1219,6 +1368,7 @@ mod tests {
             ignore: IgnoreMode::None,
             context: 3,
             max_bytes: None,
+            algorithm: DiffAlgorithm::Myers,
         })
         .unwrap();
 

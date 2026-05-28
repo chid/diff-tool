@@ -11,7 +11,7 @@
 
 mod common;
 
-use diff_core::{compare_texts, IgnoreMode};
+use diff_core::{compare_texts, DiffAlgorithm, IgnoreMode};
 use office_adapter::models::*;
 use office_adapter::word::{compare, extract, xml_diff};
 
@@ -221,6 +221,7 @@ fn run_approach_1(
         false,
         3,
         Vec::new(),
+        DiffAlgorithm::Myers,
     ))
 }
 

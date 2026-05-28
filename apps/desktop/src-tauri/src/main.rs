@@ -1,4 +1,4 @@
-use diff_core::{DiffMode, DiffRequest, IgnoreMode};
+use diff_core::{DiffAlgorithm, DiffMode, DiffRequest, IgnoreMode};
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -19,6 +19,7 @@ fn compare_files(request: CompareFilesRequest) -> Result<diff_core::DiffResult, 
         ignore: IgnoreMode::None,
         context: 3,
         max_bytes: Some(10 * 1024 * 1024),
+        algorithm: DiffAlgorithm::Myers,
     })
     .map_err(|error| error.to_string())
 }

@@ -1,7 +1,24 @@
-use clap::{Parser, Subcommand};
-use diff_core::{DiffError, DiffMode, DiffRequest, IgnoreMode};
+use clap::{Parser, Subcommand, ValueEnum};
+use diff_core::{DiffAlgorithm, DiffError, DiffMode, DiffRequest, IgnoreMode};
 use std::path::PathBuf;
 use std::process;
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum AlgorithmArg {
+    Myers,
+    Patience,
+    Histogram,
+}
+
+impl From<AlgorithmArg> for DiffAlgorithm {
+    fn from(arg: AlgorithmArg) -> Self {
+        match arg {
+            AlgorithmArg::Myers => DiffAlgorithm::Myers,
+            AlgorithmArg::Patience => DiffAlgorithm::Patience,
+            AlgorithmArg::Histogram => DiffAlgorithm::Histogram,
+        }
+    }
+}
 
 /// Exit code constants (documented in `dt --help`).
 const EXIT_SUCCESS: i32 = 0;
@@ -36,6 +53,8 @@ enum Command {
         ignore_whitespace_and_case: bool,
         #[arg(long, default_value = "3")]
         context: usize,
+        #[arg(long, value_enum, default_value = "myers")]
+        algorithm: AlgorithmArg,
     },
     Dir {
         root: PathBuf,
@@ -71,7 +90,7 @@ fn main() {
 
 fn run(args: Args) -> i32 {
     match args.command {
-        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context } => {
+        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm } => {
             let result = diff_core::compare_files(DiffRequest {
                 left,
                 right,
@@ -85,6 +104,7 @@ fn run(args: Args) -> i32 {
                 },
                 context,
                 max_bytes: Some(10 * 1024 * 1024),
+                algorithm: algorithm.into(),
             });
             let result = match result {
                 Ok(r) => r,

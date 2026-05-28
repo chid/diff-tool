@@ -21,10 +21,10 @@ large new product surfaces.
 
 ## P1: Fix The Performance Hot Path
 
-- [ ] Investigate `many-small-lines-churn`, currently about 68 seconds in the
-      synthetic full perf suite.
-- [ ] Compare `similar`, `imara-diff`, and a histogram strategy on the existing
-      perf cases.
+- [x] Investigate `many-small-lines-churn` (~64s Myers) and implement Histogram
+      algorithm via `imara-diff` (33s — 1.94× speedup). Myers, Patience, and
+      Histogram all available via `--algorithm` CLI flag. Perf suite now benchmarks
+      both Myers and Histogram for every case.
 - [ ] Add a perf budget file with initial thresholds for quick cases.
 - [ ] Fail `npm run perf:quick` only after thresholds are intentionally agreed.
 - [ ] Add peak memory measurement for macOS first, then portable support.
