@@ -557,11 +557,49 @@ struct LimitedRead {
     utf8_lossy: bool,
 }
 
-/// Heuristic binary detection: checks the first 8 KB for null bytes.
-/// Matches the behaviour of `git diff` and the `file` command.
+/// Heuristic binary detection for the first 8 KB probe window.
+///
+/// Uses two signals, matching the behaviour of `git diff` and the `file`
+/// command:
+///
+/// 1. **Null byte** — a single `0x00` byte in the probe is an immediate
+///    binary signal.
+///
+/// 2. **High-entropy / non-text ratio** — if more than 10 % of the bytes in
+///    the probe are non-printable control characters (excluding the common
+///    text whitespace bytes HT, LF, FF, CR) the file is treated as binary.
+///    High bytes (`0x80`-`0xFF`) are *not* treated as non-text because they
+///    may be valid UTF-8 multi-byte sequences.
 fn is_binary(data: &[u8]) -> bool {
     let probe = &data[..data.len().min(8192)];
-    probe.contains(&0x00)
+
+    // Signal 1: null byte anywhere in the probe.
+    if probe.contains(&0x00) {
+        return true;
+    }
+
+    // Signal 2: > 10 % non-text bytes.
+    if probe.is_empty() {
+        return false;
+    }
+    let non_text = probe.iter().filter(|&&b| is_non_text_byte(b)).count();
+    non_text * 10 > probe.len()
+}
+
+/// A byte is *non-text* when it is not printable ASCII, not one of the common
+/// text whitespace / control characters (HT, LF, FF, CR), and not a potential
+/// UTF-8 multi-byte continuation or start byte (`0x80`-`0xFF`).
+fn is_non_text_byte(b: u8) -> bool {
+    match b {
+        // Common text whitespace / control characters.
+        0x09 | 0x0A | 0x0C | 0x0D => false,
+        // Printable ASCII.
+        0x20..=0x7E => false,
+        // Potential UTF-8 multi-byte bytes.
+        0x80..=0xFF => false,
+        // Everything else: control chars (0x00-0x08, 0x0B, 0x0E-0x1F), DEL.
+        _ => true,
+    }
 }
 
 /// Normalize line endings to LF so CRLF and LF files diff as identical.
@@ -786,6 +824,45 @@ mod tests {
     }
 
     #[test]
+    fn high_entropy_non_text_bytes_detected_as_binary() {
+        // 20 bytes: 3 non-text (0x01, 0x02, 0x03), 17 printable.
+        // 3/20 = 15 % > 10 % threshold → binary.
+        let mut data = vec![b'a'; 17];
+        data.extend_from_slice(&[0x01, 0x02, 0x03]);
+        assert!(is_binary(&data));
+    }
+
+    #[test]
+    fn low_entropy_below_threshold_not_binary() {
+        // 100 bytes: 9 non-text bytes = 9 % ≤ 10 % threshold → not binary.
+        let mut data = vec![b'a'; 91];
+        for _ in 0..9 {
+            data.push(0x01);
+        }
+        assert!(!is_binary(&data));
+    }
+
+    #[test]
+    fn valid_utf8_high_bytes_not_binary() {
+        // "café" = [0x63, 0x61, 0x66, 0xC3, 0xA9] — 0xC3 and 0xA9 are
+        // valid UTF-8 multi-byte bytes, not flagged as non-text.
+        let data = "café\n".as_bytes();
+        assert!(!is_binary(data));
+    }
+
+    #[test]
+    fn common_whitespace_bytes_not_binary() {
+        // Tab (0x09), LF (0x0A), FF (0x0C), CR (0x0D) are all text bytes.
+        let data = b"hello\tworld\x0Cform\r\n";
+        assert!(!is_binary(data));
+    }
+
+    #[test]
+    fn empty_probe_not_binary() {
+        assert!(!is_binary(&[]));
+    }
+
+    #[test]
     fn utf8_with_null_after_8k_is_not_detected() {
         // null byte at byte 8193 should not trigger binary detection (probe window is 8192)
         let mut data = vec![b'a'; 9000];
@@ -795,7 +872,7 @@ mod tests {
 
     #[test]
     fn compare_files_rejects_binary_left() {
-        let mut dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let left_path = dir.path().join("binary.bin");
         let right_path = dir.path().join("text.txt");
         std::fs::write(&left_path, &[0x00, 0x01, 0x02]).unwrap();
@@ -817,7 +894,7 @@ mod tests {
 
     #[test]
     fn compare_files_rejects_binary_right() {
-        let mut dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let left_path = dir.path().join("text.txt");
         let right_path = dir.path().join("binary.bin");
         std::fs::write(&left_path, b"hello\n").unwrap();
@@ -844,7 +921,7 @@ mod tests {
         let result = compare_texts(
             "bad.txt".into(),
             "good.txt".into(),
-            std::str::from_utf8(bytes).unwrap_or("fallback"),
+            &String::from_utf8_lossy(bytes),
             "hello",
             IgnoreMode::None,
             false,
@@ -1072,7 +1149,7 @@ mod tests {
 
     #[test]
     fn compare_files_warns_on_invalid_utf8() {
-        let mut dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let left_path = dir.path().join("bad.txt");
         let right_path = dir.path().join("good.txt");
         // Write a file with an invalid UTF-8 byte (0xFF)
@@ -1129,7 +1206,7 @@ mod tests {
 
     #[test]
     fn crlf_and_lf_files_diff_as_identical() {
-        let mut dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let left = dir.path().join("crlf.txt");
         let right = dir.path().join("lf.txt");
         std::fs::write(&left, b"alpha\r\nbeta\r\ngamma\r\n").unwrap();

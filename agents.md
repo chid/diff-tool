@@ -6,98 +6,95 @@ read this first, then read `README.md`, `TODO.md`, and the relevant crate docs.
 
 ## Current Project State
 
-- The repo is a cross-platform diff/merge tool prototype.
-- The last committed scaffold commit is `0d3ece2 Scaffold diff tool prototype and tests`.
-- The committed scaffold includes:
-  - Rust workspace with `diff-core`, `git-adapter`, and `diff-cli`.
-  - Tauri 2 + React/Vite desktop shell in `apps/desktop`.
-  - Example inputs under `examples/`.
-  - Fixture cases under `fixtures/cases/`.
-  - CLI, adapter, and diff-core tests.
-  - Performance runner at `scripts/measure-performance.mjs`.
-- The desktop UI is still a fallback/mock workbench; it does not yet use
-  `@pierre/diffs` or `@pierre/trees` in the live components.
-- The current Rust diff implementation emits one full-file hunk and uses
-  `similar` for line matching.
-- The current `git-adapter` is a single-root file tree scanner, not a real
-  left/right folder diff or Git backend.
+- The repo is a cross-platform diff/merge tool prototype targeting MVP desktop ship.
+- Current commit scaffold: `0d3ece2 Scaffold diff tool prototype and tests`.
+- The `./scripts/check.sh` script (npm run check + cargo test --workspace) is green (150 tests, 0 failures).
+- The `npm run perf:quick` harness now correctly handles `dt diff` exit codes 0 and 1 as successful.
+- The workspace test suite was stabilized: diff-core fixture discovery now excludes Office-adapter fixtures.
 
-## Current Dirty/Local State To Preserve
+### Just-Completed Fixes (2025-05-25)
 
-At the time this handoff was written, the working tree had local changes and
-untracked files. Do not revert or delete them unless the user explicitly asks.
+These fixes addressed the immediate blockers in `PLAN.md`:
 
-- `.gitignore` has local ignore additions such as `.antigravitycli` and
-  `/handoff.html`.
-- Documentation files were being added or updated:
-  - `README.md`
-  - `CONTRIBUTING.md`
-  - `TODO.md`
-  - `docs/architecture.md`
-  - `docs/development.md`
-  - `docs/testing-and-performance.md`
-  - `docs/decisions/0001-rust-core-tauri-shell.md`
-  - `docs/implementation-plan.md`
-- `agents.md` itself is untracked unless a later agent stages it.
-- Other local/untracked files seen during handoff:
-  - `apps/desktop/src/App.tsx.bak`
-  - `apps/desktop/src/components/DiffPane.tsx.bak`
-  - `apps/desktop/src/components/FileTreePane.tsx.bak`
-  - `handoff.agy.html`
-- `apps/desktop/src/components/FileTreePane.tsx` had a local modification not
-  made as part of this handoff. Inspect it before editing UI code.
+1. **Test layout stabilized** — `crates/diff-core/tests/fixture_cases.rs` now filters fixture
+   directories by checking for `"ignore"` in `case.json` (text-diff schema), ignoring
+   Office fixtures (which use `"format"` instead). The office-adapter already had the
+   inverse filter. Both crates now coexist in `fixtures/cases/` without interference.
 
-## Commands That Should Work
+2. **Perf harness fixed** — `scripts/measure-performance.mjs` now treats `dt diff` exit
+   codes 0 (identical) and 1 (differences) as successful. JSON is parsed for both.
+   Console display shows `ok` for both.
 
-Use these before handing work back:
+3. **CLI `dt dir` rejects bad roots** — Before calling `scan_tree`, the CLI now checks
+   `root.exists()` and `root.is_dir()`, returning exit 2 with a clear error message for
+   nonexistent paths or files-passed-as-directories. WalkBuilder's silent empty-result
+   behavior is avoided.
 
-```bash
-./scripts/check.sh
-npm run perf:quick
-```
+4. **Unimplemented commands return exit 2** — `dt merge` and `dt git install` now print
+   `error: not implemented` to stderr and return `EXIT_ERROR` (exit 2) instead of exit 0.
+   Tests added for both.
 
-Useful direct commands:
+5. **Tests added** for dir-exit-2-when-file-not-dir, merge-exit-2-not-implemented,
+   git-install-exit-2-not-implemented.
 
-```bash
-npm_config_cache=/tmp/npm-cache npm install
-npm run dev
-npm run build
-npm run test
-cargo run -p diff-cli -- diff examples/text-basic/left.txt examples/text-basic/right.txt --json
-cargo run -p diff-cli -- dir examples/folder-basic/left --json
-```
+## Remaining PLAN.md Items (Ordered By Priority)
 
-Use `CARGO_HOME=/tmp/cargo-home` if Cargo cannot write to the default global
-cache. Use `npm_config_cache=/tmp/npm-cache` if npm cannot write to `~/.npm`.
+The following items from `PLAN.md` still need to be addressed. Items marked ✅ are done.
+
+- [✅] Stabilize the test layout — office fixtures don't break text fixture discovery
+- [✅] Fix perf harness to treat dt diff exit codes 0 and 1 as successful
+- [✅] Clean CLI release behavior — dt dir rejects nonexistent roots, unimplemented commands return exit 2
+- [ ] Make Rust DiffResult the MVP desktop rendering contract (see Phase 3 below)
+- [ ] Finish desktop open flow: no hardcoded defaults in Tauri mode; support left/right file dialogs,
+  folder picker for scan, loading/error/empty states, and binary-file errors from Rust
+- [ ] Keep MVP folder support scoped to single-root scan (done in code; label UI and docs accordingly)
+- [ ] Park Office work: keep office-adapter green, clean warning noise, document as experimental
+- [ ] Prepare packaging: commit Tauri capabilities/icons, set bundle config, produce macOS local preview build
+- [ ] Add external Git and folder-diff benchmarks at realistic scales (linux, vscode)
+- [ ] Fuzz diff and scanning paths with large random inputs and assertions
+
+## Next Work Priority
+
+In order:
+
+1. **Desktop open flow (Phase 3)** — Wire live Tauri IPC so the desktop app calls real Rust backends.
+   See `docs/tauri-ipc-wiring-plan.md`. Phase 1 (read_file_text) and Phase 2 (scan_tree) are done.
+   Phase 3: file open dialogs, drag and drop, command-line args. Phase 4: Rust-format vs pierre-format
+   decision.
+
+2. **Desktop rendering contract** — Decide whether the shipped renderer uses Rust's `FileDiffMetadata`
+   (native) or converts to `@pierre/diffs` format. The conversion layer in TypeScript
+   (`parseDiffFromFile`) should be replaced by Rust outputting the target format directly.
+
+3. **Office cleanup** — Suppress the ~100 compiler warnings in office-adapter, ensure it
+   doesn't appear in desktop/CLI public surface for MVP, and document as experimental.
+
+4. **Packaging prep** — Set Tauri bundle config intentionally, commit icons/capabilities,
+   produce a macOS preview build.
 
 ## Known Performance Baseline
 
-The full synthetic perf suite writes `target/perf/latest.json`.
+Perf harness is green. Quick mode baseline (latest run):
 
-Known baseline from the initial run:
+- `equal-1k-lines`: ok, ~179ms
+- `sparse-edits-1k-lines`: ok, ~2.7ms
+- `whitespace-only-churn`: ok, ~99.9ms
 
-- `sparse-edits-100k-lines`: about 62 ms.
-- `tail-edit-10mb`: about 233 ms.
-- `many-small-lines-churn`: about 68 seconds.
+The `many-small-lines-churn` case (full suite, not quick) is still ~68 seconds.
+This remains a regression guard for future algorithm exploration.
 
-The many-small-lines case is intentionally important. It exposes the current
-engine's pathological behavior and should remain a regression guard while
-testing alternative algorithms.
+## Commands That Should Work
 
-## Prioritized Next Work
-
-Start with `TODO.md`, but the practical order is:
-
-1. Add `npm run test:e2e` following
-   `docs/e2e-integration-test-process.md`.
-2. Replace the single full-file hunk with real context-aware hunk generation.
-3. Add intraline spans for adjacent delete/add lines.
-4. Add binary and invalid UTF-8 detection before lossy text conversion.
-5. Investigate `many-small-lines-churn` and compare `similar`, `imara-diff`,
-   and histogram-style strategies.
-6. Implement true left/right folder comparison in `git-adapter`.
-7. Spike `@pierre/diffs` and `@pierre/trees` behind wrappers in `apps/desktop`.
-8. Add UI smoke tests after the renderer strategy is clearer.
+```bash
+./scripts/check.sh                          # npm run check + cargo test --workspace
+npm run perf:quick                          # Performance harness (quick mode)
+npm run perf                                # Full performance suite
+cargo test -p diff-core                     # Text-diff unit + fixture tests (13 tests)
+cargo test -p diff-cli                      # CLI integration tests (19 tests)
+cargo test -p git-adapter                   # Filesystem scan tests
+cargo test -p office-adapter                # Office fixture tests (should remain green)
+INSTA_UPDATE=no cargo test --workspace       # All tests with snapshot checks
+```
 
 ## Architecture Rules
 
@@ -106,19 +103,18 @@ Start with `TODO.md`, but the practical order is:
 - Prefer fixture-driven tests for diff behavior.
 - Keep generated perf data under `target/perf/`; do not commit it.
 - Do not commit unrelated `.bak`, handoff HTML, local tool state, or user notes.
-- If a file has existing local changes, inspect and preserve them rather than
-  overwriting or reverting.
+- If a file has existing local changes, inspect and preserve them rather than overwriting or reverting.
 
 ## Agent Work Packages
 
-| Agent | Role | Target | Responsibilities |
-|---|---|---|---|
-| Agent A | Market and spec researcher | `docs/` | Competitive matrix, pricing, feature gaps, dependency licensing. |
-| Agent B | Pierre UI spike owner | `apps/desktop` | Integrate `@pierre/diffs` and `@pierre/trees`, test Shadow DOM styling, workers, virtualization, packaging. |
-| Agent C | Rust diff core developer | `crates/diff-core` | Hunk generation, intraline spans, binary/UTF-8 handling, diff algorithm experiments. |
-| Agent D | Git and filesystem developer | `crates/git-adapter` | Left/right folder diff, ignore rules, Git status, conflict discovery. |
-| Agent E | CLI and integration engineer | `crates/diff-cli` | `dt diff`, `dt dir`, `dt merge`, `dt git install`, exit codes, JSON/human output. |
-| Agent F | QA, fixtures, and benchmarks | `fixtures/`, `examples/`, `scripts/`, `benches/` | Fixtures, perf budgets, Playwright/UI smoke tests, large-repo benchmark path. |
+| Agent | Role | Target | Responsibilities | Status |
+|---|---|---|---|---|
+| Agent A | Market and spec researcher | `docs/` | Competitive matrix, pricing, feature gaps, dependency licensing. | Not started |
+| Agent B | Pierre UI spike owner | `apps/desktop` | Integrate `@pierre/diffs` and `@pierre/trees`, test Shadow DOM styling, workers, virtualization, packaging. | In progress (spikes done, renderer ADR pending) |
+| Agent C | Rust diff core developer | `crates/diff-core` | Hunk generation, intraline spans, binary/UTF-8 handling, diff algorithm experiments. | Most P0 items done. Perf improvements remain. |
+| Agent D | Git and filesystem developer | `crates/git-adapter` | Left/right folder diff, ignore rules, Git status, conflict discovery. | Single-root scan only. |
+| Agent E | CLI and integration engineer | `crates/diff-cli` | `dt diff`, `dt dir`, `dt merge`, `dt git install`, exit codes, JSON/human output. | Core commands solid. merge/git stub properly. |
+| Agent F | QA, fixtures, and benchmarks | `fixtures/`, `examples/`, `scripts/`, `benches/` | Fixtures, perf budgets, Playwright/UI smoke tests, large-repo benchmark path. | Perf harness fixed. |
 
 ## Acceptance Pattern For Future Tasks
 
@@ -127,6 +123,5 @@ For any nontrivial change:
 1. Add or update a fixture or test first.
 2. Implement the smallest behavior needed.
 3. Run `./scripts/check.sh`.
-4. Run `npm run perf:quick` if the diff engine, CLI, filesystem scan, or UI
-   rendering path changed.
-5. Update `TODO.md` or docs when a task changes status or scope.
+4. Run `npm run perf:quick` if the diff engine, CLI, filesystem scan, or UI rendering path changed.
+5. Update `TODO.md` and `agents.md` when a task changes status or scope.

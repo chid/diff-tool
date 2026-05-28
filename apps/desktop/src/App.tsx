@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen } from 'lucide-react';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -9,7 +9,8 @@ import { NativeDiffRenderer } from './components/NativeDiffRenderer';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
 import { isTauri } from './tauriDetect';
-import { openFileDialog } from './tauri';
+import { openFileDialog, openFolderDialog, pathIsDir, getLaunchArgs } from './tauri';
+import { listen } from '@tauri-apps/api/event';
 import type { DiffResult } from './types';
 
 // ── Static DiffResult from examples/text-basic fixture ─────────────────
@@ -57,7 +58,89 @@ function AppInner() {
   const [activePath, setActivePath] = useState<string | undefined>(undefined);
   const [leftPath, setLeftPath] = useState<string | undefined>(undefined);
   const [rightPath, setRightPath] = useState<string | undefined>(undefined);
+  const [rootPath, setRootPath] = useState<string | undefined>(undefined);
+  const [dropOverlay, setDropOverlay] = useState(false);
+  const dropCounter = useRef(0);
   const { settings, updateSetting } = useSettings();
+
+  // ── CLI arg handling (Tauri only) ────────────────────────────────────
+  useEffect(() => {
+    if (!isTauri) return;
+    getLaunchArgs().then(async (args) => {
+      if (args.length === 0) return;
+      // First positional arg as directory or left file
+      const first = args[0];
+      const firstIsDir = await pathIsDir(first);
+      if (firstIsDir) {
+        setRootPath(first);
+        return;
+      }
+      // Two file args → left/right compare
+      if (args.length >= 2) {
+        setLeftPath(first);
+        setRightPath(args[1]);
+      } else {
+        // Single file arg → open as right (preview)
+        setRightPath(first);
+      }
+    }).catch(() => {
+      // get_launch_args unavailable (e.g. Vite dev) — silently ignore
+    });
+  }, []);
+
+  // ── Drag-and-drop handling (Tauri only) ──────────────────────────────
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const unlistenDragEnter = listen<string[]>('tauri://drag-enter', () => {
+      dropCounter.current++;
+      setDropOverlay(true);
+    });
+
+    const unlistenDragLeave = listen('tauri://drag-leave', () => {
+      dropCounter.current--;
+      if (dropCounter.current <= 0) {
+        dropCounter.current = 0;
+        setDropOverlay(false);
+      }
+    });
+
+    const unlistenDragDrop = listen<string[]>('tauri://drag-drop', async (event) => {
+      dropCounter.current = 0;
+      setDropOverlay(false);
+
+      const paths = event.payload;
+      if (paths.length === 0) return;
+
+      // Single directory → scan it
+      if (paths.length === 1) {
+        const isDir = await pathIsDir(paths[0]);
+        if (isDir) {
+          setRootPath(paths[0]);
+          return;
+        }
+        // Single file → open as right (preview)
+        setRightPath(paths[0]);
+        setActivePath(undefined);
+        return;
+      }
+
+      // Multiple files → use first two as left/right
+      setLeftPath(paths[0]);
+      setRightPath(paths[1]);
+      setActivePath(undefined);
+    });
+
+    return () => {
+      Promise.all([unlistenDragEnter, unlistenDragLeave, unlistenDragDrop]).then(
+        ([ue, ul, ud]) => {
+          ue();
+          ul();
+          ud();
+        },
+      );
+    };
+  }, []);
 
   // Browser visual test harness — accessed via ?test=diff
   const searchParams = new URLSearchParams(window.location.search);
@@ -109,7 +192,7 @@ function AppInner() {
     [loadState],
   );
 
-  const treeEntries = useTreeLoader();
+  const treeEntries = useTreeLoader(rootPath);
 
   const basename = (p: string) => p.split('/').pop() ?? p;
 
@@ -147,7 +230,31 @@ function AppInner() {
     }
   }, []);
 
+  const handleOpenFolder = useCallback(async () => {
+    if (!isTauri) return;
+    const p = await openFolderDialog();
+    if (p !== null) {
+      setRootPath(p);
+      setActivePath(undefined);
+    }
+  }, []);
+
   return (
+    <>
+      {dropOverlay && (
+        <div
+          className="drop-overlay"
+          aria-label="Drop files or folders to compare"
+        >
+          <div className="drop-overlay-card">
+            <FolderOpen size={48} className="drop-overlay-icon" />
+            <h2 className="drop-overlay-title">Drop to compare</h2>
+            <p className="drop-overlay-hint">
+              Files → compare left/right &nbsp;·&nbsp; Folder → scan tree
+            </p>
+          </div>
+        </div>
+      )}
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
@@ -160,6 +267,16 @@ function AppInner() {
           <button><Image size={16} /> Images</button>
           <button><TerminalSquare size={16} /> CLI</button>
         </nav>
+        {isTauri && (
+          <button className="tree-open-folder-btn" onClick={handleOpenFolder} title="Open folder to scan">
+            <FolderOpen size={15} />
+            <span className="tree-open-folder-label">
+              {rootPath
+                ? rootPath.split('/').pop() ?? rootPath
+                : 'Open folder...'}
+            </span>
+          </button>
+        )}
         <FileTreePane
           entries={treeEntries}
           activePath={activePath}
@@ -221,6 +338,7 @@ function AppInner() {
         />
       </section>
     </main>
+    </>
   );
 }
 

@@ -9,6 +9,8 @@ struct CaseMeta {
     name: String,
     ignore: IgnoreMode,
     expected: ExpectedStats,
+    #[serde(default)]
+    expected_warnings: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +52,15 @@ fn fixture_cases_match_expected_stats() {
             meta.name
         );
         assert_eq!(result.truncated, meta.expected.truncated, "{}", meta.name);
+        assert_eq!(
+            result.warnings.len(),
+            meta.expected_warnings,
+            "{}: expected {} warnings, got {}: {:?}",
+            meta.name,
+            meta.expected_warnings,
+            result.warnings.len(),
+            result.warnings
+        );
     }
 }
 
@@ -99,7 +110,18 @@ fn fixture_case_dirs() -> Vec<PathBuf> {
         .unwrap()
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.join("case.json").exists())
+        .filter(|path| {
+            let case_json = path.join("case.json");
+            if !case_json.exists() {
+                return false;
+            }
+            // Only include directories whose case.json has the text-diff
+            // schema (contains an "ignore" field).  Office-adapter fixtures
+            // have a "format" field instead and use a different schema.
+            fs::read_to_string(&case_json)
+                .map(|s| s.contains("\"ignore\""))
+                .unwrap_or(false)
+        })
         .collect::<Vec<_>>();
     dirs.sort();
     dirs

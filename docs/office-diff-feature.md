@@ -208,15 +208,31 @@ Tests:
 - Add workbook range filters early for Excel.
 - Record parse time and comparison time separately in future instrumentation.
 
+## Status
+
+**⚠️ EXPERIMENTAL — Parked for MVP**
+
+The `office-adapter` crate implements format detection, safe zip reading, XML
+extraction, and structured comparison for all three Office formats. It passes
+tests against hand-authored fixtures and has zero compiler warnings. However,
+it is **not exposed** in the CLI or desktop UI for the MVP release.
+
+Office support will be activated in a post-MVP release after:
+- Real-world fixture coverage
+- CLI integration (`dt office`)
+- Desktop UI with format-specific views
+- Shared-string (Excel) and image comparison
+- Performance benchmarks on real documents
+
 ## TODO
 
-- [ ] Add `crates/office-adapter`.
+- [x] Add `crates/office-adapter`.
 - [ ] Add `dt office` CLI placeholder.
-- [ ] Add hand-authored minimal `.docx`, `.pptx`, and `.xlsx` fixtures.
-- [ ] Add format detection and safe zip guards.
-- [ ] Add structured text extraction for Word.
-- [ ] Add slide/text extraction for PowerPoint.
-- [ ] Add workbook/sheet/cell extraction for Excel.
-- [ ] Add Office result model and JSON tests.
+- [x] Add hand-authored minimal `.docx`, `.pptx`, and `.xlsx` fixtures.
+- [x] Add format detection and safe zip guards.
+- [x] Add structured text extraction for Word.
+- [x] Add slide/text extraction for PowerPoint.
+- [x] Add workbook/sheet/cell extraction for Excel.
+- [x] Add Office result model and JSON tests.
 - [ ] Add desktop Office compare route.
 - [ ] Add market-informed ADR after choosing parser/rendering libraries.

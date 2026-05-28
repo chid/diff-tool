@@ -7,8 +7,25 @@ Microsoft Office installation required.
 
 ## Status
 
--   **Phase 1 (current):** Format detection, safe zip reading, module skeleton, data models.
--   **Phase 2 (next):** XML extraction and structured comparison engine.
+**⚠️ EXPERIMENTAL — Parked for MVP**
+
+Office document comparison is functional but **not included in the MVP desktop/CLI
+release**. The extraction and comparison engines for `.docx`, `.pptx`, and `.xlsx`
+work against hand-authored fixtures, but the feature still needs:
+
+- Real-world fixture testing with production Office files
+- CLI integration (`dt office` command)
+- Desktop UI with format-specific navigation
+- Shared-string support (Excel)
+- Embedded image comparison
+- Performance benchmarking on large documents
+
+Office support will be activated in a post-MVP release. For now, this crate
+is kept green (tests pass, zero compiler warnings) as an experimental
+foundation.
+
+-   **Phase 1 (done):** Format detection, safe zip reading, module skeleton, data models.
+-   **Phase 2 (done):** XML extraction and structured comparison engine for all three formats.
 -   **Phase 3 (future):** CLI integration (`dt office`) and desktop UI.
 
 ## Sandbox Setup

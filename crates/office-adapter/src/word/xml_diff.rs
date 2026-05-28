@@ -102,7 +102,7 @@ enum SimpleEvent {
         attrs: Vec<(String, String)>,
     },
     End {
-        name: String,
+        _name: String,
     },
     Text {
         content: String,
@@ -133,7 +133,7 @@ fn collect_events(xml: &[u8]) -> XmlResult<Vec<SimpleEvent>> {
             }
             Ok(Event::End(ref e)) => {
                 let name = format_name(e.name());
-                events.push(SimpleEvent::End { name });
+                events.push(SimpleEvent::End { _name: name });
             }
             Ok(Event::Text(ref t)) => {
                 let content = t.unescape().unwrap_or_default().trim().to_owned();

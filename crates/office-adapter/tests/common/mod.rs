@@ -75,7 +75,7 @@ fn rels_xl_workbook() -> &'static str {
 /// Generate `ppt/presentation.xml` with slide list.
 fn presentation_xml(slide_count: usize) -> String {
     let slides: String = (1..=slide_count)
-        .map(|i| {
+        .map(|_i| {
             format!(
                 r#"  <p:sldId id="256" r:id="rId1"/>"#
             )
@@ -220,6 +220,7 @@ pub fn docx_right_body() -> &'static str {
 }
 
 /// Fixture: Word document with two paragraphs (multi-section).
+#[allow(dead_code)]
 pub fn docx_two_paragraphs() -> &'static str {
     r#"    <w:p>
       <w:r>
@@ -234,6 +235,7 @@ pub fn docx_two_paragraphs() -> &'static str {
 }
 
 /// Fixture: Word document with a table.
+#[allow(dead_code)]
 pub fn docx_with_table() -> &'static str {
     r#"    <w:p>
       <w:r>
@@ -268,6 +270,7 @@ pub fn docx_with_table() -> &'static str {
 // ── Complex docx generators for approach comparison research ───────────
 
 /// Docx with mixed formatting: bold "Important" + normal "text here." in same paragraph.
+#[allow(dead_code)]
 pub fn docx_body_with_formatting() -> &'static str {
     r#"    <w:p>
       <w:r>
@@ -281,6 +284,7 @@ pub fn docx_body_with_formatting() -> &'static str {
 }
 
 /// Docx body with same text but formatting removed (bold → normal).
+#[allow(dead_code)]
 pub fn docx_body_without_formatting() -> &'static str {
     r#"    <w:p>
       <w:r>
@@ -290,6 +294,7 @@ pub fn docx_body_without_formatting() -> &'static str {
 }
 
 /// Docx body with heading + two body paragraphs.
+#[allow(dead_code)]
 pub fn docx_body_heading_and_paras() -> &'static str {
     r#"    <w:p>
       <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
@@ -304,6 +309,7 @@ pub fn docx_body_heading_and_paras() -> &'static str {
 }
 
 /// Docx body with heading + modified body paragraphs for diff testing.
+#[allow(dead_code)]
 pub fn docx_body_heading_and_paras_modified() -> &'static str {
     r#"    <w:p>
       <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
@@ -318,6 +324,7 @@ pub fn docx_body_heading_and_paras_modified() -> &'static str {
 }
 
 /// Docx body with a table containing numeric data.
+#[allow(dead_code)]
 pub fn docx_body_with_table_data() -> &'static str {
     r#"    <w:p>
       <w:r><w:t>Sales Data</w:t></w:r>
@@ -348,6 +355,7 @@ pub fn docx_body_with_table_data() -> &'static str {
 }
 
 /// Docx body with table data modified (Q2 values changed).
+#[allow(dead_code)]
 pub fn docx_body_with_table_data_modified() -> &'static str {
     r#"    <w:p>
       <w:r><w:t>Sales Data</w:t></w:r>
@@ -378,6 +386,7 @@ pub fn docx_body_with_table_data_modified() -> &'static str {
 }
 
 /// Docx body with tracked changes: deleted paragraph wrapped in `<w:del>`.
+#[allow(dead_code)]
 pub fn docx_body_with_tracked_changes() -> &'static str {
     r#"    <w:p>
       <w:r><w:t>This paragraph is unchanged.</w:t></w:r>
@@ -396,6 +405,7 @@ pub fn docx_body_with_tracked_changes() -> &'static str {
 }
 
 /// Same docx without tracked changes (showing resolved state).
+#[allow(dead_code)]
 pub fn docx_body_tracked_changes_resolved() -> &'static str {
     r#"    <w:p>
       <w:r><w:t>This paragraph is unchanged.</w:t></w:r>

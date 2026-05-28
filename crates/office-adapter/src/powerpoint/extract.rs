@@ -19,7 +19,7 @@ pub fn extract_slide_text(xml: &[u8]) -> XmlResult<String> {
     let mut reader = xml_util::create_reader(xml);
     let mut buf = Vec::new();
     let mut output = String::new();
-    let mut depth = 0u32;
+    let mut _depth = 0u32;
     let mut in_shape = false;
     let mut shape_type = ShapeType::Unknown;
     let mut in_paragraph = false;
@@ -28,7 +28,7 @@ pub fn extract_slide_text(xml: &[u8]) -> XmlResult<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                depth += 1;
+                _depth += 1;
                 let name = e.name();
 
                 if is_p_element(name, b"sp") {
@@ -53,7 +53,7 @@ pub fn extract_slide_text(xml: &[u8]) -> XmlResult<String> {
                 } else if is_a_element(name, b"t") && in_paragraph {
                     // read_text() consumes the End event.
                     if let Ok(text) = reader.read_text(e.name()) {
-                        depth -= 1;
+                        _depth -= 1;
                         if !text.is_empty() {
                             para_text.push_str(&text);
                         }
@@ -77,7 +77,7 @@ pub fn extract_slide_text(xml: &[u8]) -> XmlResult<String> {
                 } else if is_p_element(name, b"sp") && in_shape {
                     in_shape = false;
                 }
-                depth -= 1;
+                _depth -= 1;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(XmlError::Parse(e.to_string())),

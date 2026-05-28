@@ -201,31 +201,22 @@ check(
   resultDirNonexistent.status !== null && resultDirNonexistent.error === undefined,
   'dt dir nonexistent: command spawned without OS error',
 );
-// Note: scan_tree silently returns 0 entries for nonexistent paths (no error).
-// This documents the current behavior; if the CLI is later changed to error,
-// update this assertion to expect exit code 2.
+// CLI now returns exit 2 for nonexistent paths with an error on stderr
+// (see crates/diff-cli/src/main.rs Command::Dir).
 check(
-  resultDirNonexistent.status === 0,
-  `dt dir nonexistent: exit code is 0 (silently returns 0 entries), got ${resultDirNonexistent.status}`,
+  resultDirNonexistent.status === 2,
+  `dt dir nonexistent: exit code is 2 (EXIT_ERROR), got ${resultDirNonexistent.status}`,
 );
 
-const dirStderr = resultDirNonexistent.stderr.toString().trim();
-check(dirStderr === '', `dt dir nonexistent: stderr is empty (no error), got "${dirStderr}"`);
+const dirStderr = resultDirNonexistent.stderr.toString();
+check(
+  dirStderr.includes('error:') && dirStderr.includes('does not exist'),
+  `dt dir nonexistent: stderr reports path does not exist, got "${dirStderr.trim()}"`,
+);
 
-let dirEntries;
-try {
-  dirEntries = JSON.parse(resultDirNonexistent.stdout.toString());
-  pass('dt dir nonexistent: stdout is valid JSON');
-} catch {
-  fail('dt dir nonexistent: stdout is not valid JSON');
-  dirEntries = null;
-}
-if (dirEntries) {
-  check(
-    Array.isArray(dirEntries) && dirEntries.length === 0,
-    `dt dir nonexistent: returns empty array (${dirEntries.length} entries)`,
-  );
-}
+// Stdout should be empty — errors happen before any output.
+const dirStdout = resultDirNonexistent.stdout.toString().trim();
+check(dirStdout === '', `dt dir nonexistent: stdout is empty (error on stderr), got "${dirStdout.slice(0, 200)}"`);
 
 // ── sanity: valid files still work ────────────────────────────────────────
 

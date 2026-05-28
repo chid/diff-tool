@@ -118,6 +118,17 @@ fn run(args: Args) -> i32 {
             }
         }
         Command::Dir { root, json } => {
+            // Explicitly reject nonexistent or non-directory roots before
+            // scan_tree, since WalkBuilder silently returns 0 entries for
+            // missing paths.
+            if !root.exists() {
+                eprintln!("error: {} does not exist", root.display());
+                return EXIT_ERROR;
+            }
+            if !root.is_dir() {
+                eprintln!("error: {} is not a directory", root.display());
+                return EXIT_ERROR;
+            }
             let result = match git_adapter::scan_tree(&root) {
                 Ok(r) => r,
                 Err(e) => {
@@ -139,25 +150,19 @@ fn run(args: Args) -> i32 {
             EXIT_SUCCESS
         }
         Command::Merge {
-            base,
-            ours,
-            theirs,
-            out,
+            base: _,
+            ours: _,
+            theirs: _,
+            out: _,
         } => {
-            println!(
-                "merge requested: base={} ours={} theirs={} out={}",
-                base.display(),
-                ours.display(),
-                theirs.display(),
-                out.display()
-            );
-            EXIT_SUCCESS
+            eprintln!("error: dt merge is not implemented yet");
+            EXIT_ERROR
         }
         Command::Git {
             command: GitCommand::Install,
         } => {
-            println!("git difftool/mergetool install is not implemented yet");
-            EXIT_SUCCESS
+            eprintln!("error: dt git install is not implemented yet");
+            EXIT_ERROR
         }
     }
 }

@@ -39,13 +39,29 @@ fn read_file_text(path: PathBuf, max_bytes: Option<u64>) -> Result<String, Strin
     Ok(String::from_utf8_lossy(slice).into_owned())
 }
 
+/// Returns true if the path exists and is a directory.
+#[tauri::command]
+fn path_is_dir(path: PathBuf) -> bool {
+    path.is_dir()
+}
+
+/// Returns the command-line arguments this process was launched with,
+/// excluding the binary name (argv[0]). The frontend uses this to
+/// auto-open files or folders passed via CLI.
+#[tauri::command]
+fn get_launch_args() -> Vec<String> {
+    std::env::args().skip(1).collect()
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             compare_files,
             scan_tree,
-            read_file_text
+            read_file_text,
+            path_is_dir,
+            get_launch_args
         ])
         .run(tauri::generate_context!())
         .expect("failed to run app");
@@ -99,5 +115,32 @@ mod tests {
         let result = read_file_text(path, None).unwrap();
         // from_utf8_lossy replaces invalid bytes with U+FFFD
         assert!(result.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn path_is_dir_returns_true_for_directory() {
+        let dir = std::env::temp_dir().join("diff-tool-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(path_is_dir(dir));
+    }
+
+    #[test]
+    fn path_is_dir_returns_false_for_file() {
+        let path = temp_file("regular.txt", b"content");
+        assert!(!path_is_dir(path));
+    }
+
+    #[test]
+    fn path_is_dir_returns_false_for_nonexistent() {
+        assert!(!path_is_dir(PathBuf::from("/nonexistent/path.xyz")));
+    }
+
+    #[test]
+    fn get_launch_args_returns_vec() {
+        // In test context args() includes the test binary name followed by
+        // test harness flags. We only check that it returns a Vec (may be empty).
+        let args = get_launch_args();
+        // The result is a Vec<String> — no further assertions needed.
+        let _: Vec<String> = args;
     }
 }

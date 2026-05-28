@@ -25,12 +25,12 @@ pub fn extract_sheet_text(xml: &[u8]) -> XmlResult<String> {
     let mut buf = Vec::new();
     let mut rows: BTreeMap<u32, Vec<(u32, String)>> = BTreeMap::new();
     let mut current_row: Option<u32> = None;
-    let mut depth = 0u32;
+    let mut _depth = 0u32;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                depth += 1;
+                _depth += 1;
                 let name = e.name();
 
                 if is_s_element(name, b"row") {
@@ -66,7 +66,7 @@ pub fn extract_sheet_text(xml: &[u8]) -> XmlResult<String> {
                         // Read <is><t>value</t></is> or direct <v>value</v>
                         if let Some(val) = read_cell_value(&mut reader, &mut buf, &cell_type, &col_str)
                         {
-                            depth -= 1; // cell end consumed by read_text
+                            _depth -= 1; // cell end consumed by read_text
                             rows.entry(row).or_default().push((col_idx, val));
                         }
                     } else if cell_type == "s" {
@@ -74,11 +74,11 @@ pub fn extract_sheet_text(xml: &[u8]) -> XmlResult<String> {
                         // We still need to consume the element so we don't
                         // break the parser.
                         skip_cell_contents(&mut reader, &mut buf);
-                        depth -= 1; // cell end consumed
+                        _depth -= 1; // cell end consumed
                     } else {
                         // Unknown type — skip.
                         skip_cell_contents(&mut reader, &mut buf);
-                        depth -= 1;
+                        _depth -= 1;
                     }
                 }
             }
@@ -86,7 +86,7 @@ pub fn extract_sheet_text(xml: &[u8]) -> XmlResult<String> {
                 if is_s_element(e.name(), b"row") {
                     current_row = None;
                 }
-                depth -= 1;
+                _depth -= 1;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(XmlError::Parse(e.to_string())),
@@ -128,7 +128,7 @@ pub fn extract_sheet_text(xml: &[u8]) -> XmlResult<String> {
 fn read_cell_value(
     reader: &mut quick_xml::Reader<&[u8]>,
     buf: &mut Vec<u8>,
-    cell_type: &str,
+    _cell_type: &str,
     _col_ref: &str,
 ) -> Option<String> {
     let mut inner_depth = 1u32; // we just read the <c> Start

@@ -99,8 +99,10 @@ for (const testCase of cases) {
   const rightBytes = Buffer.byteLength(right);
   const totalMb = (leftBytes + rightBytes) / (1024 * 1024);
 
+  // dt diff returns exit 0 when files are identical, exit 1 when differences
+  // are found, and exit 2 on error.  Both 0 and 1 are successful executions.
   let stats = null;
-  if (run.status === 0) {
+  if (run.status === 0 || run.status === 1) {
     stats = JSON.parse(run.stdout).stats;
   }
 
@@ -114,7 +116,7 @@ for (const testCase of cases) {
     throughput_mb_s: Math.round((totalMb / (durationMs / 1000)) * 100) / 100,
     exit_code: run.status,
     stats,
-    stderr: run.status === 0 ? undefined : run.stderr.slice(0, 4000),
+    stderr: (run.status === 0 || run.status === 1) ? undefined : run.stderr.slice(0, 4000),
   });
 }
 
@@ -135,7 +137,7 @@ mkdirSync(perfRoot, { recursive: true });
 writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
 for (const result of results) {
-  const status = result.exit_code === 0 ? 'ok' : `exit ${result.exit_code}`;
+  const status = (result.exit_code === 0 || result.exit_code === 1) ? 'ok' : `exit ${result.exit_code}`;
   console.log(
     `${result.name}: ${status}, ${result.duration_ms}ms, ${result.throughput_mb_s} MB/s`,
   );

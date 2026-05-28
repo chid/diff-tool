@@ -1,0 +1,11 @@
+{
+  "name": "invalid utf-8 both",
+  "ignore": "none",
+  "expected": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 0,
+    "truncated": false
+  },
+  "expected_warnings": 2
+}

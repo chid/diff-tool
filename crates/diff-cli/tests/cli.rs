@@ -278,17 +278,66 @@ fn dir_exit_0_on_success() {
 }
 
 #[test]
-fn dir_exit_0_when_missing() {
-    // scan_tree uses WalkBuilder which silently handles nonexistent roots;
-    // it returns 0 entries with exit 0 rather than an error.
+fn dir_exit_2_when_missing() {
+    // scan_tree previously returned 0 entries for nonexistent roots;
+    // the CLI now explicitly checks and errors before invoking scan_tree.
     let missing = PathBuf::from("/nonexistent/dir/path");
 
     cmd()
         .args(["dir"])
         .arg(&missing)
         .assert()
-        .code(0)
-        .stdout(predicate::str::contains("0 entries"));
+        .code(2)
+        .stderr(predicate::str::contains("does not exist"));
+}
+
+#[test]
+fn dir_exit_2_when_file_not_dir() {
+    let dir = tempdir().unwrap();
+    let file = dir.path().join("not-a-dir");
+    fs::write(&file, "hello\n").unwrap();
+
+    cmd()
+        .args(["dir"])
+        .arg(&file)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("not a directory"));
+}
+
+#[test]
+fn merge_exit_2_not_implemented() {
+    let dir = tempdir().unwrap();
+    let base = dir.path().join("base.txt");
+    let ours = dir.path().join("ours.txt");
+    let theirs = dir.path().join("theirs.txt");
+    let out = dir.path().join("out.txt");
+    fs::write(&base, "base\n").unwrap();
+    fs::write(&ours, "ours\n").unwrap();
+    fs::write(&theirs, "theirs\n").unwrap();
+
+    cmd()
+        .args(["merge"])
+        .arg("--base")
+        .arg(&base)
+        .arg("--ours")
+        .arg(&ours)
+        .arg("--theirs")
+        .arg(&theirs)
+        .arg("--out")
+        .arg(&out)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("not implemented"));
+}
+
+#[test]
+fn git_install_exit_2_not_implemented() {
+    cmd()
+        .args(["git", "install"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("not implemented"));
 }
 
 #[test]

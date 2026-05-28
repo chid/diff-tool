@@ -5,18 +5,19 @@ large new product surfaces.
 
 ## P0: Make The Scaffold Production-Shaped
 
-- [ ] Add `npm run test:e2e` using the Markdown process in
-      `docs/e2e-integration-test-process.md`.
+- [x] Add `npm run test:e2e` using the Markdown process in
+      `docs/e2e-integration-test-process.md`. (CLI e2e: 6/6 pass; Playwright browser e2e: pass.)
 - [x] Make context configurable via `--context` CLI flag (context-aware hunk
       generation already uses the `context` value in `DiffRequest`).
 - [x] Add intraline spans for adjacent delete/add pairs.
 - [x] Normalize or explicitly model line endings so CRLF/LF behavior is
       intentional and documented.
-- [ ] Add binary detection before lossy UTF-8 conversion.
-- [ ] Add invalid UTF-8 fixtures and tests.
+- [x] Add binary detection before lossy UTF-8 conversion (null byte + >10% non-text byte ratio in 8KB probe).
+- [x] Add invalid UTF-8 fixtures and tests (`fixtures/cases/invalid-utf8-left/`, `invalid-utf8-both/`).
+- [x] Clean up office-adapter compiler warnings, document as experimental for MVP (see `docs/office-diff-feature.md`).
 - [x] Make `dt diff` exit non-zero for unreadable inputs and invalid arguments
       with documented exit codes.
-- [ ] Add stable CLI output snapshots for human and JSON modes.
+- [x] Add stable CLI output snapshots for human and JSON modes (verified via e2e and insta snapshots).
 
 ## P1: Fix The Performance Hot Path
 
@@ -48,7 +49,7 @@ large new product surfaces.
       See [docs/tauri-ipc-wiring-plan.md](docs/tauri-ipc-wiring-plan.md) for the phased plan.
 - [x] Phase 1: Add `read_file_text` Tauri command, wire diff content with loading/error states.
 - [x] Phase 2: Wire `scan_tree` for live file tree entries.
-- [ ] Phase 3: File open dialogs, drag and drop, command-line args.
+- [x] Phase 3: File open dialogs (`openFolderDialog`), drag and drop (`tauri://drag-drop`), command-line args (`getLaunchArgs`).
 - [ ] Phase 4: Decision on Rust-format vs. pierre-format diff output.
 - [ ] TODO: Update Rust diff-cli to output `FileDiffMetadata`-compatible JSON directly, eliminating the TypeScript `parseDiffFromFile` converter layer.
 
@@ -119,4 +120,5 @@ The full ideation catalog is in [docs/ai-features.md](docs/ai-features.md).
 - [x] Add an ADR when choosing the AI feature strategy (BYOK / API compat).
 - [ ] Add an ADR when choosing the final UI renderer strategy.
 - [ ] Add Windows setup notes after validating Tauri and CLI on Windows.
+- [x] Tauri bundle config: icons, capabilities, macOS preview build (`DiffTool.app`, `DiffTool_0.1.0_aarch64.dmg`).
 - [ ] Add release packaging docs once bundle assets and signing are real.
