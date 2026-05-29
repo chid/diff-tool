@@ -7,6 +7,13 @@ export type LoadState =
   | { phase: 'loaded'; fileDiff: FileDiffMetadata }
   | { phase: 'error'; message: string };
 
+/** Progress event sent from the Rust backend during diff computation. */
+export interface DiffProgress {
+  stage: 'reading' | 'normalizing' | 'computing_diff' | 'computing_intraline_spans' | 'building_hunks';
+  path?: string;
+  bytes?: number;
+}
+
 export type ChangeKind = 'context' | 'addition' | 'deletion';
 
 export interface IntraSpan {

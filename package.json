@@ -24,7 +24,8 @@
     "test:e2e:whitespace-case-ignore": "node tests/e2e/whitespace_case_ignore.test.mjs",
     "test:e2e:folder-scan": "node tests/e2e/folder_scan_happy_path.test.mjs",
     "test:e2e:error-path": "node tests/e2e/cli_error_path.test.mjs",
-    "test:e2e:context": "node tests/e2e/context_flag.test.mjs"
+    "test:e2e:context": "node tests/e2e/context_flag.test.mjs",
+    "screenshots": "node apps/desktop/scripts/screenshots.mjs"
   },
   "engines": {
     "node": ">=22"

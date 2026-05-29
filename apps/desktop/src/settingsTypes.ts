@@ -58,6 +58,8 @@ export interface SettingsState {
   overflow: 'scroll' | 'wrap';
 
   // Algorithm
+  diffAlgorithm: 'myers' | 'histogram' | 'patience';
+  defaultDeadline: number;
   diffIndicators: DiffIndicators;
   hunkSeparators: Exclude<HunkSeparators, 'custom'>;
   lineDiffType: LineDiffTypes;
@@ -99,6 +101,10 @@ export const SETTINGS_DEFAULTS: SettingsState = buildDefaults(SETTINGS_REGISTRY)
 
 export function settingsToFileDiffOptions(s: SettingsState) {
   return {
+    // Core diff algorithm settings — passed through to the Rust backend
+    diffAlgorithm: s.diffAlgorithm,
+    defaultDeadline: s.defaultDeadline,
+    // Display
     diffStyle: s.diffStyle,
     theme: s.theme,
     themeType: s.themeType,

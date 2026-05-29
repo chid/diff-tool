@@ -6,6 +6,7 @@ version.workspace = true
 
 [dependencies]
 imara-diff = "0.2.0"
+memmap2.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 

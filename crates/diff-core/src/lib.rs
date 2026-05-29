@@ -15,6 +15,7 @@
 //! after `core.autocrlf` processing) and most modern diff tools.
 
 use imara_diff::InternedInput;
+use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,6 +32,25 @@ pub enum DiffError {
     },
     #[error("{path} appears to be a binary file")]
     BinaryFile { path: PathBuf },
+}
+
+/// Progress stage reported to the optional callback during diff computation.
+///
+/// Suitable for displaying a progress indicator in CLI or desktop UIs.
+/// All variants fire *before* their corresponding work begins, so the UI
+/// can display a consistent "about to do X" state.
+#[derive(Debug, Clone)]
+pub enum Progress {
+    /// About to read a file from disk (size in bytes if known).
+    Reading { path: PathBuf, bytes: u64 },
+    /// About to normalize line endings and split into lines.
+    Normalizing,
+    /// About to run the diff algorithm.
+    ComputingDiff,
+    /// About to compute character-level (intraline) spans.
+    ComputingIntralineSpans,
+    /// About to build context-aware hunks.
+    BuildingHunks,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,8 +190,33 @@ pub struct ImageDiffResult {
 }
 
 pub fn compare_files(request: DiffRequest) -> Result<DiffResult, DiffError> {
-    let left = read_limited(&request.left, request.max_bytes)?;
-    let right = read_limited(&request.right, request.max_bytes)?;
+    compare_files_with_progress(request, None)
+}
+
+/// Same as [`compare_files`] but fires an optional progress callback at each
+/// pipeline stage.  The callback runs synchronously on the calling thread.
+pub fn compare_files_with_progress(
+    request: DiffRequest,
+    progress: Option<Box<dyn Fn(Progress) + Send>>,
+) -> Result<DiffResult, DiffError> {
+    // Resolve file sizes once so we don't call stat(2) again inside read_limited.
+    let left_size = std::fs::metadata(&request.left).map(|m| m.len()).ok();
+    let right_size = std::fs::metadata(&request.right).map(|m| m.len()).ok();
+
+    if let Some(ref cb) = progress {
+        cb(Progress::Reading {
+            path: request.left.clone(),
+            bytes: left_size.unwrap_or(0),
+        });
+    }
+    let left = read_limited_known(&request.left, request.max_bytes, left_size)?;
+    if let Some(ref cb) = progress {
+        cb(Progress::Reading {
+            path: request.right.clone(),
+            bytes: right_size.unwrap_or(0),
+        });
+    }
+    let right = read_limited_known(&request.right, request.max_bytes, right_size)?;
     let mut warnings: Vec<String> = Vec::new();
 
     if left.is_binary {
@@ -210,6 +255,7 @@ pub fn compare_files(request: DiffRequest) -> Result<DiffResult, DiffError> {
         warnings,
         request.algorithm,
         request.deadline_ms,
+        progress,
     ))
 }
 
@@ -224,6 +270,7 @@ pub fn compare_texts(
     mut warnings: Vec<String>,
     algorithm: DiffAlgorithm,
     deadline_ms: Option<u64>,
+    progress: Option<Box<dyn Fn(Progress) + Send>>,
 ) -> DiffResult {
     // Normalise line endings before any other processing so that CRLF and LF
     // files produce identical diffs regardless of which entry-point is used
@@ -233,10 +280,18 @@ pub fn compare_texts(
     let left = &left_norm;
     let right = &right_norm;
 
+    if let Some(ref cb) = progress {
+        cb(Progress::Normalizing);
+    }
+
     let normalized_left = normalize_for_compare(left, ignore);
     let normalized_right = normalize_for_compare(right, ignore);
     let left_lines = split_lines_lossless(left);
     let right_lines = split_lines_lossless(right);
+
+    if let Some(ref cb) = progress {
+        cb(Progress::ComputingDiff);
+    }
 
     let (stats, mut lines) = match deadline_ms {
         Some(ms) => {
@@ -254,8 +309,14 @@ pub fn compare_texts(
     };
 
     // Annotate intraline (character-level) spans on adjacent delete/insert pairs.
+    if let Some(ref cb) = progress {
+        cb(Progress::ComputingIntralineSpans);
+    }
     compute_intraline_spans(&mut lines);
 
+    if let Some(ref cb) = progress {
+        cb(Progress::BuildingHunks);
+    }
     let hunks = build_hunks(&lines, context);
 
     DiffResult {
@@ -807,20 +868,100 @@ pub fn normalize_line_endings(input: &str) -> String {
     out
 }
 
-fn read_limited(path: &Path, max_bytes: Option<u64>) -> Result<LimitedRead, DiffError> {
+/// Files smaller than this threshold are read with `fs::read` (simple, fast).
+/// Files at or above this threshold use memory-mapped I/O to avoid loading
+/// the entire file into a heap buffer when only the first N bytes are needed.
+const MMAP_THRESHOLD: u64 = 10 * 1024 * 1024; // 10 MiB
+
+/// Read a file, optionally limiting to `max_bytes`.  Accepts a pre-computed
+/// the caller (e.g. from a progress callback that already did `stat(2)`).
+fn read_limited_known(
+    path: &Path,
+    max_bytes: Option<u64>,
+    file_size: Option<u64>,
+) -> Result<LimitedRead, DiffError> {
+    if let Some(sz) = file_size.filter(|&sz| sz >= MMAP_THRESHOLD) {
+        return read_mmap(path, max_bytes, sz);
+    }
+
     let bytes = fs::read(path).map_err(|source| DiffError::ReadFile {
         path: path.to_path_buf(),
         source,
     })?;
-    let truncated = max_bytes.is_some_and(|max| bytes.len() as u64 > max);
-    let slice = match max_bytes {
-        Some(max) => &bytes[..bytes.len().min(max as usize)],
-        None => bytes.as_slice(),
+    bytes_to_limited(&bytes, max_bytes, None, |slice| String::from_utf8_lossy(slice).into_owned())
+}
+
+/// Read a large file via memory-mapped I/O.
+///
+/// When `max_bytes` is set, only the first `max_bytes` bytes are accessed;
+/// the OS pages in only what is actually read, avoiding the cost of loading
+/// the entire file into RAM.
+fn read_mmap(path: &Path, max_bytes: Option<u64>, file_len: u64) -> Result<LimitedRead, DiffError> {
+    let file = std::fs::File::open(path).map_err(|source| DiffError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })?;
+
+    // Only map up to max_bytes if set, otherwise map the whole file.
+    let map_len = match max_bytes {
+        Some(max) => file_len.min(max),
+        None => file_len,
     };
 
-    let is_bin = is_binary(slice);
-    let utf8_lossy = std::str::from_utf8(slice).is_err();
-    let raw = String::from_utf8_lossy(slice).into_owned();
+    // Don't attempt to mmap an empty file — just return empty contents.
+    if map_len == 0 {
+        return Ok(LimitedRead {
+            contents: String::new(),
+            truncated: false,
+            is_binary: false,
+            utf8_lossy: false,
+        });
+    }
+
+    // Safety: the file is opened read-only above.  The mapping is immutable
+    // and dropped before any other access to the file could invalidate it.
+    let mmap = unsafe {
+        Mmap::map(&file).map_err(|source| DiffError::ReadFile {
+            path: path.to_path_buf(),
+            source,
+        })?
+    };
+
+    let result = bytes_to_limited(
+        &mmap[..map_len as usize],
+        max_bytes,
+        Some(file_len), // pass actual file length for accurate truncation detection
+        |s| String::from_utf8_lossy(s).into_owned(),
+    );
+
+    // Explicitly drop the mmap before returning to release the mapping.
+    drop(mmap);
+
+    result
+}
+
+/// Common post-processing from a byte slice: binary detection, UTF-8
+/// conversion, line-ending normalization, and truncation flag.
+///
+/// `total_len` is the actual file length (used for truncation detection when
+/// the caller has already limited the slice, e.g. via mmap). When `None`,
+/// `slice.len()` is used as the total length (e.g. `fs::read` path).
+fn bytes_to_limited(
+    slice: &[u8],
+    max_bytes: Option<u64>,
+    total_len: Option<u64>,
+    to_string: impl FnOnce(&[u8]) -> String,
+) -> Result<LimitedRead, DiffError> {
+    let effective_len = total_len.unwrap_or(slice.len() as u64);
+    let truncated = max_bytes.is_some_and(|max| effective_len > max);
+    let actual = match max_bytes {
+        Some(max) => &slice[..slice.len().min(max as usize)],
+        None => slice,
+    };
+
+    let is_bin = is_binary(actual);
+    let utf8_lossy = std::str::from_utf8(actual).is_err();
+    let raw = to_string(actual);
 
     Ok(LimitedRead {
         contents: normalize_line_endings(&raw),
@@ -847,6 +988,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         assert_eq!(result.stats.additions, 1);
         assert_eq!(result.stats.deletions, 1);
@@ -865,6 +1007,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         assert_eq!(result.stats.additions, 0);
@@ -886,6 +1029,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         assert_eq!(result.files[0].hunks.len(), 1, "changes close together produce 1 hunk");
@@ -910,6 +1054,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         assert_eq!(result.files[0].hunks.len(), 2, "far-apart changes produce 2 hunks");
     }
@@ -927,6 +1072,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         assert!(result.files[0].hunks.is_empty(), "identical files produce 0 hunks");
     }
@@ -943,6 +1089,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         assert!(result.files[0].hunks.is_empty());
@@ -962,6 +1109,7 @@ mod tests {
             1,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         let hunk = &result.files[0].hunks[0];
@@ -986,6 +1134,7 @@ mod tests {
             2,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         // context=2, gap between changes at lines 2 and 10 = 7 lines > 4 → 2 hunks
@@ -1118,6 +1267,7 @@ mod tests {
             vec!["bad.txt contains invalid UTF-8".into()],
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         assert!(
             result.warnings.iter().any(|w| w.contains("invalid UTF-8")),
@@ -1139,6 +1289,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         assert!(result.warnings.is_empty());
     }
@@ -1158,6 +1309,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         let del = result.files[0].hunks[0]
@@ -1197,6 +1349,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1235,6 +1388,7 @@ mod tests {
             Vec::new(),
             DiffAlgorithm::Myers,
             None,
+            None,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1260,6 +1414,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         let del = result.files[0].hunks[0]
@@ -1291,6 +1446,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         let hunk = &result.files[0].hunks[0];
@@ -1333,6 +1489,7 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
             None,
         );
         let del = result.files[0].hunks[0]
@@ -1435,5 +1592,72 @@ mod tests {
         assert_eq!(result.stats.deletions, 0);
         assert_eq!(result.stats.unchanged, 3);
         assert!(result.warnings.is_empty());
+    }
+
+    #[test]
+    fn progress_callback_fires_all_stages_in_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let left_path = dir.path().join("left.txt");
+        let right_path = dir.path().join("right.txt");
+        std::fs::write(&left_path, b"line1\nline2\nline3\n").unwrap();
+        std::fs::write(&right_path, b"line1\nmodified\nline3\n").unwrap();
+
+        // Arc<Mutex> satisfies both Send + 'static for the callback.
+        let stages = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let stages_cb = stages.clone();
+        let l_path = left_path.clone();
+        let r_path = right_path.clone();
+
+        let result = compare_files_with_progress(
+            DiffRequest {
+                left: left_path.clone(),
+                right: right_path.clone(),
+                mode: DiffMode::Split,
+                ignore: IgnoreMode::None,
+                context: 3,
+                max_bytes: None,
+                algorithm: DiffAlgorithm::Myers,
+                deadline_ms: None,
+            },
+            Some(Box::new(move |p| {
+                let label = match &p {
+                    Progress::Reading { path, .. } => {
+                        if *path == l_path {
+                            "reading-left"
+                        } else if *path == r_path {
+                            "reading-right"
+                        } else {
+                            "reading-unknown"
+                        }
+                    }
+                    Progress::Normalizing => "normalizing",
+                    Progress::ComputingDiff => "computing-diff",
+                    Progress::ComputingIntralineSpans => "computing-intraline",
+                    Progress::BuildingHunks => "building-hunks",
+                };
+                stages_cb.lock().unwrap().push(label.to_string());
+            })),
+        )
+        .unwrap();
+
+        let fired = stages.lock().unwrap();
+        assert_eq!(
+            *fired,
+            vec![
+                "reading-left",
+                "reading-right",
+                "normalizing",
+                "computing-diff",
+                "computing-intraline",
+                "building-hunks",
+            ],
+            "progress callback must fire all 6 stages (5 variants, Reading twice) in pipeline order"
+        );
+
+        // The diff result should still be correct.
+        assert_eq!(result.files.len(), 1);
+        assert!(!result.files[0].hunks.is_empty());
+        assert_eq!(result.stats.deletions, 1);
+        assert_eq!(result.stats.additions, 1);
     }
 }

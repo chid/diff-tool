@@ -1,6 +1,7 @@
 use diff_core::{DiffAlgorithm, DiffMode, DiffRequest, IgnoreMode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::Emitter;
 
 const DEFAULT_MAX_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
 
@@ -8,20 +9,91 @@ const DEFAULT_MAX_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
 struct CompareFilesRequest {
     left: PathBuf,
     right: PathBuf,
+    #[serde(default)]
+    algorithm: Option<String>,
+    #[serde(default)]
+    deadline_ms: Option<u64>,
+    #[serde(default)]
+    progress: bool,
+}
+
+/// Payload emitted to the frontend via `diff-progress` events.
+#[derive(Debug, Clone, Serialize)]
+struct DiffProgressPayload {
+    stage: &'static str,
+    /// File path for the `reading` stage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    /// File size in bytes for the `reading` stage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bytes: Option<u64>,
+}
+
+/// Parse an algorithm string, defaulting to Myers for unknown values.
+fn parse_algorithm(s: &Option<String>) -> DiffAlgorithm {
+    match s.as_deref() {
+        Some("histogram") => DiffAlgorithm::Histogram,
+        Some("patience") => DiffAlgorithm::Patience,
+        Some("myers") | None => DiffAlgorithm::Myers,
+        _ => DiffAlgorithm::Myers,
+    }
 }
 
 #[tauri::command]
-fn compare_files(request: CompareFilesRequest) -> Result<diff_core::DiffResult, String> {
-    diff_core::compare_files(DiffRequest {
-        left: request.left,
-        right: request.right,
-        mode: DiffMode::Split,
-        ignore: IgnoreMode::None,
-        context: 3,
-        max_bytes: Some(10 * 1024 * 1024),
-        algorithm: DiffAlgorithm::Myers,
-        deadline_ms: None,
-    })
+fn compare_files(
+    app_handle: tauri::AppHandle,
+    request: CompareFilesRequest,
+) -> Result<diff_core::DiffResult, String> {
+    let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> =
+        if request.progress {
+            let app = app_handle.clone();
+            Some(Box::new(move |p| {
+                let payload = match p {
+                    diff_core::Progress::Reading { path, bytes } => DiffProgressPayload {
+                        stage: "reading",
+                        path: Some(path.display().to_string()),
+                        bytes: Some(bytes),
+                    },
+                    diff_core::Progress::Normalizing => DiffProgressPayload {
+                        stage: "normalizing",
+                        path: None,
+                        bytes: None,
+                    },
+                    diff_core::Progress::ComputingDiff => DiffProgressPayload {
+                        stage: "computing_diff",
+                        path: None,
+                        bytes: None,
+                    },
+                    diff_core::Progress::ComputingIntralineSpans => DiffProgressPayload {
+                        stage: "computing_intraline_spans",
+                        path: None,
+                        bytes: None,
+                    },
+                    diff_core::Progress::BuildingHunks => DiffProgressPayload {
+                        stage: "building_hunks",
+                        path: None,
+                        bytes: None,
+                    },
+                };
+                let _ = app.emit("diff-progress", payload);
+            }))
+        } else {
+            None
+        };
+
+    diff_core::compare_files_with_progress(
+        DiffRequest {
+            left: request.left,
+            right: request.right,
+            mode: DiffMode::Split,
+            ignore: IgnoreMode::None,
+            context: 3,
+            max_bytes: Some(DEFAULT_MAX_BYTES),
+            algorithm: parse_algorithm(&request.algorithm),
+            deadline_ms: request.deadline_ms.filter(|&ms| ms > 0),
+        },
+        progress_cb,
+    )
     .map_err(|error| error.to_string())
 }
 

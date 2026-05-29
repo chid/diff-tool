@@ -2,8 +2,27 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { DiffResult, DirEntryDiff } from './types';
 
-export async function compareFiles(left: string, right: string): Promise<DiffResult> {
-  return invoke<DiffResult>('compare_files', { request: { left, right } });
+export interface CompareFilesOptions {
+  algorithm?: 'myers' | 'histogram' | 'patience';
+  deadlineMs?: number;
+  /** Enable progress events via the Tauri event bus (`diff-progress`). */
+  progress?: boolean;
+}
+
+export async function compareFiles(
+  left: string,
+  right: string,
+  options?: CompareFilesOptions,
+): Promise<DiffResult> {
+  return invoke<DiffResult>('compare_files', {
+    request: {
+      left,
+      right,
+      algorithm: options?.algorithm,
+      deadline_ms: options?.deadlineMs,
+      progress: options?.progress ?? false,
+    },
+  });
 }
 
 export async function scanTree(root: string): Promise<DirEntryDiff[]> {

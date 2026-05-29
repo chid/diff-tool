@@ -1,11 +1,13 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen } from 'lucide-react';
+import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play } from 'lucide-react';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsProvider, useSettings } from './components/SettingsContext';
 import { BrowserTestHarness } from './components/BrowserTestHarness';
 import { NativeDiffRenderer } from './components/NativeDiffRenderer';
+import { DemoGallery } from './components/DemoGallery';
+import { WelcomeHero } from './components/WelcomeHero';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
 import { isTauri } from './tauriDetect';
@@ -145,11 +147,44 @@ function AppInner() {
   // Browser visual test harness — accessed via ?test=diff
   const searchParams = new URLSearchParams(window.location.search);
   const testMode = searchParams.get('test');
+  const demoMode = searchParams.get('demo');
 
   if (testMode === 'diff') {
     return (
       <main className="app-shell">
         <BrowserTestHarness />
+      </main>
+    );
+  }
+
+  // Demo gallery — accessed via ?demo=gallery
+  if (demoMode === 'gallery') {
+    return (
+      <SettingsProvider>
+        <DemoGallery />
+      </SettingsProvider>
+    );
+  }
+
+  // Welcome / landing page — accessed via ?demo=welcome
+  if (demoMode === 'welcome') {
+    return (
+      <main className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <SplitSquareHorizontal size={20} />
+            <span>Diff Tool</span>
+          </div>
+          <nav className="mode-list" aria-label="Comparison modes">
+            <button className="active"><GitBranch size={16} /> Changes</button>
+            <button><Layers3 size={16} /> Folders</button>
+            <button><Image size={16} /> Images</button>
+            <button><TerminalSquare size={16} /> CLI</button>
+          </nav>
+        </aside>
+        <section className="workspace" aria-label="Diff workspace">
+          <WelcomeHero />
+        </section>
       </main>
     );
   }
@@ -185,7 +220,7 @@ function AppInner() {
     );
   }
 
-  const { state: loadState, stats, nativeDiff, retry } = useFileDiffLoader(leftPath, rightPath);
+  const { state: loadState, stats, nativeDiff, retry, diffProgress } = useFileDiffLoader(leftPath, rightPath);
 
   const fileDiff = useMemo(
     () => (loadState.phase === 'loaded' ? loadState.fileDiff : null),
@@ -304,6 +339,12 @@ function AppInner() {
                   {rightPath ? basename(rightPath) : 'Open right...'}
                 </span>
               </button>
+              {!isTauri && (
+                <a href="/?demo=gallery" className="toolbar-open-btn" title="Explore live diff examples">
+                  <Play size={14} />
+                  <span className="toolbar-open-label">Live examples</span>
+                </a>
+              )}
             </div>
             <div className="toolbar-stats">
               <span className="toolbar-stat toolbar-stat-add">
@@ -330,12 +371,19 @@ function AppInner() {
             <SettingsPanel />
           </div>
         </header>
-        <DiffPane
-          fileDiff={fileDiff}
-          nativeDiff={nativeDiff}
-          loadState={loadState}
-          onRetry={retry}
-        />
+        {loadState.phase === 'idle' ? (
+          <article className="diff-pane" aria-label="Welcome">
+            <WelcomeHero onExplore={() => window.location.href = '/?demo=gallery'} />
+          </article>
+        ) : (
+          <DiffPane
+            fileDiff={fileDiff}
+            nativeDiff={nativeDiff}
+            loadState={loadState}
+            onRetry={retry}
+            diffProgress={diffProgress}
+          />
+        )}
       </section>
     </main>
     </>

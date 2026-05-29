@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseDiffFromFile } from '@pierre/diffs';
 import type { FileContents, FileDiffMetadata } from '@pierre/diffs';
-import type { LoadState, DiffResult } from './types';
+import type { LoadState, DiffResult, DiffProgress } from './types';
 import { isTauri } from './tauriDetect';
-import { readFileText, compareFiles } from './tauri';
+import { readFileText, compareFiles, type CompareFilesOptions } from './tauri';
+import { useSettings } from './components/SettingsContext';
 import { sampleOldFile, sampleNewFile, sampleStats } from './sampleData';
+import { listen } from '@tauri-apps/api/event';
 
 /**
  * Current demo paths. These will be replaced by file-open dialogs in Phase 3.
@@ -38,11 +40,14 @@ export function useFileDiffLoader(
   stats: { additions: number; deletions: number; unchanged: number };
   nativeDiff: DiffResult | null;
   retry: () => void;
+  diffProgress: DiffProgress | null;
 } {
+  const { settings } = useSettings();
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<LoadState>({ phase: 'loading' });
   const [stats, setStats] = useState({ additions: 0, deletions: 0, unchanged: 0 });
   const [nativeDiff, setNativeDiff] = useState<DiffResult | null>(null);
+  const [diffProgress, setDiffProgress] = useState<DiffProgress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,11 +60,13 @@ export function useFileDiffLoader(
           setState({ phase: 'loaded', fileDiff });
           setStats(sampleStats);
           setNativeDiff(null);
+          setDiffProgress(null);
         }
         return;
       }
 
       setState({ phase: 'loading' });
+      setDiffProgress(null);
 
       try {
         let fileDiff: FileDiffMetadata;
@@ -77,10 +84,24 @@ export function useFileDiffLoader(
 
           // Fetch real stats from the Rust diff engine
           try {
-            const rustResult = await compareFiles(leftPath, rightPath);
-            if (!cancelled) {
-              setStats(rustResult.stats);
-              setNativeDiff(rustResult);
+            const compareOpts: CompareFilesOptions = {
+              algorithm: settings.diffAlgorithm,
+              deadlineMs: settings.defaultDeadline > 0 ? settings.defaultDeadline : undefined,
+              progress: true,
+            };
+            // Listen for progress events *before* starting the comparison
+            const unlisten = await listen<DiffProgress>('diff-progress', (event) => {
+              if (!cancelled) setDiffProgress(event.payload);
+            });
+            try {
+              const rustResult = await compareFiles(leftPath, rightPath, compareOpts);
+              if (!cancelled) {
+                setStats(rustResult.stats);
+                setNativeDiff(rustResult);
+              }
+            } finally {
+              unlisten();
+              if (!cancelled) setDiffProgress(null);
             }
           } catch (statsErr) {
             console.warn('compare_files failed, using client-side stats:', statsErr);
@@ -123,10 +144,23 @@ export function useFileDiffLoader(
 
           // Fetch real stats from the Rust diff engine for the two demo files
           try {
-            const rustResult = await compareFiles(DEMO_LEFT, DEMO_RIGHT);
-            if (!cancelled) {
-              setStats(rustResult.stats);
-              setNativeDiff(rustResult);
+            const compareOpts: CompareFilesOptions = {
+              algorithm: settings.diffAlgorithm,
+              deadlineMs: settings.defaultDeadline > 0 ? settings.defaultDeadline : undefined,
+              progress: true,
+            };
+            const unlisten = await listen<DiffProgress>('diff-progress', (event) => {
+              if (!cancelled) setDiffProgress(event.payload);
+            });
+            try {
+              const rustResult = await compareFiles(DEMO_LEFT, DEMO_RIGHT, compareOpts);
+              if (!cancelled) {
+                setStats(rustResult.stats);
+                setNativeDiff(rustResult);
+              }
+            } finally {
+              unlisten();
+              if (!cancelled) setDiffProgress(null);
             }
           } catch (statsErr) {
             console.warn('compare_files failed, using client-side stats:', statsErr);
@@ -140,6 +174,7 @@ export function useFileDiffLoader(
             phase: 'error',
             message: err instanceof Error ? err.message : String(err),
           });
+          setDiffProgress(null);
         }
       }
     }
@@ -153,5 +188,5 @@ export function useFileDiffLoader(
     setRetryKey((k) => k + 1);
   }, []);
 
-  return { state, stats, nativeDiff, retry };
+  return { state, stats, nativeDiff, retry, diffProgress };
 }

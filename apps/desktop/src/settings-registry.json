@@ -61,6 +61,29 @@
     },
 
     {
+      "key": "diffAlgorithm",
+      "label": "Diff algorithm",
+      "description": "Algorithm used to compute diffs. Myers is fastest, Histogram matches git diff output.",
+      "category": "algorithm",
+      "control": "select",
+      "default": "myers",
+      "options": [
+        { "label": "Myers (fastest)",               "value": "myers" },
+        { "label": "Histogram (git-compatible)",    "value": "histogram" },
+        { "label": "Patience (mapped to Histogram)", "value": "patience" }
+      ]
+    },
+    {
+      "key": "defaultDeadline",
+      "label": "Deadline (ms)",
+      "description": "Max time budget for diff computation. 0 = no limit.",
+      "category": "algorithm",
+      "control": "number",
+      "default": 0,
+      "min": 0,
+      "max": 300000
+    },
+    {
       "key": "diffIndicators",
       "label": "Change indicators",
       "description": "Visual markers for changed lines",

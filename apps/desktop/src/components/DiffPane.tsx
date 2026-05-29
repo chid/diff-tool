@@ -4,23 +4,63 @@ import { Loader2, AlertTriangle, RefreshCw, FileX } from 'lucide-react';
 import { useSettings } from './SettingsContext';
 import { settingsToFileDiffOptions } from '../settingsTypes';
 import { NativeDiffRenderer } from './NativeDiffRenderer';
-import type { LoadState, DiffResult } from '../types';
+import type { LoadState, DiffResult, DiffProgress } from '../types';
 
 interface DiffPaneProps {
   fileDiff: FileDiffMetadata | null;
   nativeDiff: DiffResult | null;
   loadState: LoadState;
   onRetry: () => void;
+  diffProgress?: DiffProgress | null;
 }
 
-export function DiffPane({ fileDiff, nativeDiff, loadState, onRetry }: DiffPaneProps) {
+const PROGRESS_LABELS: Record<string, string> = {
+  reading: 'Reading files…',
+  normalizing: 'Normalizing…',
+  computing_diff: 'Computing diff…',
+  computing_intraline_spans: 'Computing intraline spans…',
+  building_hunks: 'Building hunks…',
+};
+
+const PROGRESS_PCT: Record<string, number> = {
+  reading: 10,
+  normalizing: 25,
+  computing_diff: 55,
+  computing_intraline_spans: 75,
+  building_hunks: 95,
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+export function DiffPane({ fileDiff, nativeDiff, loadState, onRetry, diffProgress }: DiffPaneProps) {
   const { settings } = useSettings();
 
   if (loadState.phase === 'loading') {
+    const stage = diffProgress?.stage;
+    const label = stage ? PROGRESS_LABELS[stage] ?? stage : 'Reading files…';
+    const detail = stage === 'reading' && diffProgress?.path
+      ? diffProgress.path.split('/').pop() ?? diffProgress.path
+      : undefined;
+    const fileBytes = stage === 'reading' ? diffProgress?.bytes : undefined;
+
     return (
       <article className="diff-pane diff-pane-center" aria-label="Loading diff">
         <Loader2 className="diff-loader-icon" size={32} />
-        <p className="diff-status-text">Reading files…</p>
+        <p className="diff-status-text">{label}</p>
+        {detail && <p className="diff-status-detail">{detail}</p>}
+        <div className="diff-progress-track" role="progressbar" aria-valuenow={stage ? PROGRESS_PCT[stage] : 0} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="diff-progress-fill"
+            style={{ width: `${stage ? PROGRESS_PCT[stage] : 5}%` }}
+          />
+        </div>
+        {fileBytes !== undefined && fileBytes > 0 && (
+          <p className="diff-status-hint">{formatBytes(fileBytes)}</p>
+        )}
       </article>
     );
   }
