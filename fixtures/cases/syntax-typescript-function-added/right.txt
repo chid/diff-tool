@@ -1,0 +1,7 @@
+function a(): void {
+    return;
+}
+
+function b(): void {
+    return;
+}

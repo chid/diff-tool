@@ -1,0 +1,3 @@
+fn keep() { }
+fn modify() { let x = 2; }
+fn add() { }

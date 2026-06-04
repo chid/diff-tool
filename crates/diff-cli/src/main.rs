@@ -8,11 +8,12 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::process;
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum AlgorithmArg {
     Myers,
     Patience,
     Histogram,
+    Syntax,
 }
 
 impl From<AlgorithmArg> for DiffAlgorithm {
@@ -21,6 +22,7 @@ impl From<AlgorithmArg> for DiffAlgorithm {
             AlgorithmArg::Myers => DiffAlgorithm::Myers,
             AlgorithmArg::Patience => DiffAlgorithm::Patience,
             AlgorithmArg::Histogram => DiffAlgorithm::Histogram,
+            AlgorithmArg::Syntax => DiffAlgorithm::Syntax,
         }
     }
 }
@@ -68,6 +70,14 @@ enum Command {
         /// Print progress messages to stderr during diff computation.
         #[arg(long)]
         progress: bool,
+        /// Override language for syntax-aware AST diffing.
+        /// Supported: rust, typescript, python.
+        #[arg(long)]
+        language: Option<String>,
+        /// AST node depth for syntax-aware diffing.
+        /// Levels: statement (default), function, token.
+        #[arg(long)]
+        syntax_depth: Option<String>,
     },
     /// Scan a directory tree, or compare two directories.
     ///
@@ -92,6 +102,14 @@ enum Command {
         /// Each message is prefixed with the relative file path.
         #[arg(long)]
         progress: bool,
+        /// Override language for syntax-aware AST diffing.
+        /// Supported: rust, typescript, python.
+        #[arg(long)]
+        language: Option<String>,
+        /// AST node depth for syntax-aware diffing.
+        /// Levels: statement (default), function, token.
+        #[arg(long)]
+        syntax_depth: Option<String>,
     },
     Merge {
         #[arg(long)]
@@ -142,7 +160,7 @@ fn main() {
 
 fn run(args: Args) -> i32 {
     match args.command {
-        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm, deadline, progress } => {
+        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm, deadline, progress, language, syntax_depth } => {
             // Merge config defaults: CLI flags > config > hardcoded defaults.
             let cfg = config::load();
             let algorithm = algorithm
@@ -153,6 +171,10 @@ fn run(args: Args) -> i32 {
                 })
                 .unwrap_or(AlgorithmArg::Myers);
             let deadline = deadline.or(cfg.defaults.deadline);
+
+            if algorithm == AlgorithmArg::Syntax {
+                eprintln!("warning: experimental --algorithm syntax (see ROUGH_EDGES.md)");
+            }
 
             let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> =
                 if progress {
@@ -196,6 +218,8 @@ fn run(args: Args) -> i32 {
                     max_bytes: Some(10 * 1024 * 1024),
                     algorithm: algorithm.into(),
                     deadline_ms: deadline,
+                    language,
+                    syntax_depth,
                 },
                 progress_cb,
             );
@@ -230,7 +254,7 @@ fn run(args: Args) -> i32 {
                 EXIT_DIFFERENCES
             }
         }
-        Command::Dir { root, right, json, algorithm, deadline, progress } => {
+        Command::Dir { root, right, json, algorithm, deadline, progress, language, syntax_depth } => {
             if !root.exists() {
                 eprintln!("error: {} does not exist", root.display());
                 return EXIT_ERROR;
@@ -251,8 +275,12 @@ fn run(args: Args) -> i32 {
                 .unwrap_or(AlgorithmArg::Myers);
             let deadline = deadline.or(cfg.defaults.deadline);
 
+            if algorithm == AlgorithmArg::Syntax {
+                eprintln!("warning: experimental --algorithm syntax (see ROUGH_EDGES.md)");
+            }
+
             if let Some(right_root) = right {
-                return run_dir_diff(root, right_root, json, algorithm, deadline, progress);
+                return run_dir_diff(root, right_root, json, algorithm, deadline, progress, language, syntax_depth);
             }
 
             // Single-root listing (backward compatible).
@@ -386,6 +414,8 @@ fn run_dir_diff(
     algorithm: AlgorithmArg,
     deadline: Option<u64>,
     progress: bool,
+    language: Option<String>,
+    syntax_depth: Option<String>,
 ) -> i32 {
     if !right_root.exists() {
         eprintln!("error: {} does not exist", right_root.display());
@@ -479,6 +509,8 @@ fn run_dir_diff(
                         max_bytes: Some(10 * 1024 * 1024),
                         algorithm: algorithm.into(),
                         deadline_ms: deadline,
+                        language: language.clone(),
+                        syntax_depth: syntax_depth.clone(),
                     }, progress_cb) {
                         Ok(result) => {
                             let changed =

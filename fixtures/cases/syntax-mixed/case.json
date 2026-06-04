@@ -1,0 +1,12 @@
+{
+  "name": "syntax: mixed changes",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "rust",
+  "expected": {
+    "additions": 2,
+    "deletions": 2,
+    "unchanged": 0,
+    "truncated": false
+  }
+}

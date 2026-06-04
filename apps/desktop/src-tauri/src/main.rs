@@ -91,6 +91,8 @@ fn compare_files(
             max_bytes: Some(DEFAULT_MAX_BYTES),
             algorithm: parse_algorithm(&request.algorithm),
             deadline_ms: request.deadline_ms.filter(|&ms| ms > 0),
+            language: None,
+            syntax_depth: None,
         },
         progress_cb,
     )

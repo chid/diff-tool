@@ -53,24 +53,63 @@ The following items from `PLAN.md` still need to be addressed. Items marked ✅ 
 - [ ] Add external Git and folder-diff benchmarks at realistic scales (linux, vscode)
 - [ ] Fuzz diff and scanning paths with large random inputs and assertions
 
+## Tree-Sitter Syntax-Aware Diffing — Implemented on `feat/tree-sitter-syntax-diffing`
+
+A detailed implementation plan and research doc is at
+[docs/tree-sitter-diffing.html](docs/tree-sitter-diffing.html).
+
+### What's built (Phases 0-3)
+
+- **`crates/diff-core/Cargo.toml`** — Added `tree-sitter`, `tree-sitter-rust`,
+  `tree-sitter-typescript`, `tree-sitter-python` dependencies.
+- **`crates/diff-core/src/parser.rs`** — `Language` enum (Rust/TypeScript/Python),
+  `language_from_extension()`, `parse_file()` → `Vec<AstNode>`, `build_child_links()`.
+  Statement-depth node filtering with whitespace-normalized content hashing.
+- **`crates/diff-core/src/ast_diff.rs`** — `compute_ast_diff()` with 4-pass
+  matching: hash-based (unique), iterative bottom-up (parent-child chain),
+  parent-child propagation, positional heuristic (moves/renames). 8 `ChangeClass`
+  variants: Identical, Modified, Moved, Renamed, Added, Deleted, Reformatted,
+  TypeChanged.
+- **`crates/diff-core/src/ast_to_hunks.rs`** — `ast_diff_to_hunks_full()` converts
+  AST diff to `Vec<LineChange>` with line-level event mapping.
+- **`crates/diff-core/src/lib.rs`** — `DiffAlgorithm::Syntax` variant. Pipeline
+  branching in `run_diff()` and `run_diff_with_deadline()`. Size gate (10K lines),
+  language detection, silent fallback to `imara-diff` for unsupported languages.
+
+### Completed (Phases 4-5)
+
+- **Phase 4: CLI flags** — `--algorithm syntax`, `--language <lang>`, `--syntax-depth <level>`
+  wired in `crates/diff-cli/src/main.rs`. Added `Syntax` to `AlgorithmArg` enum.
+  Propagated `language` and `syntax_depth` through `DiffRequest` → `compare_texts` →
+  `run_diff` → `try_run_syntax_diff`.
+- **Phase 5: Fixtures + perf benchmarks** — 8 syntax fixture cases under
+  `fixtures/cases/syntax-*` (identical, rename, add, delete, modify, move, type-change,
+  mixed). Added `SyntaxDepth` enum (`Function`/`Statement`/`Token`) to `parser.rs`.
+  Excluded `source_file` root wrapper from statement nodes. Added `has_unmatched_ancestor`
+  dedup in `ast_to_hunks.rs` to avoid nested duplicate events. Updated perf harness
+  with `syntax-equal-1k-fns` and `syntax-sparse-fn-edit` scenarios.
+- `Syntax` diffing is ~25% slower than Myers for 100-function files (~4ms vs ~3ms).
+
+### Status
+
+Feature is **experimental** — emits a warning on use. Known limitations documented
+in `ROUGH_EDGES.md`.
+
+### Next steps
+
+- **SemanticTag on Hunk** — Add `ChangeClass` to `Hunk` struct for per-hunk
+  classification badges in the desktop UI.
+
 ## Next Work Priority
 
 In order:
 
-1. **Desktop open flow (Phase 3)** — Wire live Tauri IPC so the desktop app calls real Rust backends.
-   See `docs/tauri-ipc-wiring-plan.md`. Phase 1 (read_file_text) and Phase 2 (scan_tree) are done.
-   Phase 3: file open dialogs, drag and drop, command-line args. Phase 4: Rust-format vs pierre-format
-   decision.
-
-2. **Desktop rendering contract** — Decide whether the shipped renderer uses Rust's `FileDiffMetadata`
-   (native) or converts to `@pierre/diffs` format. The conversion layer in TypeScript
-   (`parseDiffFromFile`) should be replaced by Rust outputting the target format directly.
-
-3. **Office cleanup** — Suppress the ~100 compiler warnings in office-adapter, ensure it
-   doesn't appear in desktop/CLI public surface for MVP, and document as experimental.
-
-4. **Packaging prep** — Set Tauri bundle config intentionally, commit icons/capabilities,
-   produce a macOS preview build.
+1. **Tree-siter Phases 4-5** — CLI flags and fixtures/perf (on `feat/tree-sitter-syntax-diffing`)
+2. **Desktop open flow (Phase 3)** — Wire live Tauri IPC so the desktop app calls real Rust backends.
+   See `docs/tauri-ipc-wiring-plan.md`. Phase 1 and 2 are done.
+3. **Desktop rendering contract** — Decide Rust's `FileDiffMetadata` vs `@pierre/diffs` format.
+4. **Office cleanup** — Suppress compiler warnings, document as experimental.
+5. **Packaging prep** — Bundle config, icons, macOS preview build.
 
 ## Known Performance Baseline
 

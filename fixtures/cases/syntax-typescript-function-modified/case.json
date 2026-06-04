@@ -1,0 +1,12 @@
+{
+  "name": "syntax: TypeScript function modified",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "typescript",
+  "expected": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 0,
+    "truncated": false
+  }
+}

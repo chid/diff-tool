@@ -1,0 +1,12 @@
+{
+  "name": "syntax: Python function added",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "python",
+  "expected": {
+    "additions": 1,
+    "deletions": 1,
+    "unchanged": 0,
+    "truncated": false
+  }
+}

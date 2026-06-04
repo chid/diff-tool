@@ -11,6 +11,15 @@ struct CaseMeta {
     expected: ExpectedStats,
     #[serde(default)]
     expected_warnings: usize,
+    /// Optional algorithm override. Defaults to myers.
+    #[serde(default)]
+    algorithm: Option<DiffAlgorithm>,
+    /// Optional language override for syntax diffs.
+    #[serde(default)]
+    language: Option<String>,
+    /// Optional syntax depth override.
+    #[serde(default)]
+    syntax_depth: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,6 +35,7 @@ fn fixture_cases_match_expected_stats() {
     for case_dir in fixture_case_dirs() {
         let meta: CaseMeta =
             serde_json::from_str(&fs::read_to_string(case_dir.join("case.json")).unwrap()).unwrap();
+        let algorithm = meta.algorithm.unwrap_or(DiffAlgorithm::Myers);
         let result = diff_core::compare_files(DiffRequest {
             left: case_dir.join("left.txt"),
             right: case_dir.join("right.txt"),
@@ -33,8 +43,10 @@ fn fixture_cases_match_expected_stats() {
             ignore: meta.ignore,
             context: 3,
             max_bytes: None,
-            algorithm: DiffAlgorithm::Myers,
+            algorithm,
             deadline_ms: None,
+            language: meta.language,
+            syntax_depth: meta.syntax_depth,
         })
         .unwrap();
 
@@ -78,6 +90,8 @@ fn diff_result_json_shape_is_stable() {
         max_bytes: None,
         algorithm: DiffAlgorithm::Myers,
         deadline_ms: None,
+        language: None,
+        syntax_depth: None,
     })
     .unwrap();
 
@@ -105,6 +119,8 @@ fn max_bytes_marks_truncated_results() {
         max_bytes: Some(8),
         algorithm: DiffAlgorithm::Myers,
         deadline_ms: None,
+        language: None,
+        syntax_depth: None,
     })
     .unwrap();
 

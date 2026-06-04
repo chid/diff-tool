@@ -14,6 +14,12 @@
 //! This policy matches the behaviour of `git diff` (which compares the index blob
 //! after `core.autocrlf` processing) and most modern diff tools.
 
+pub mod parser;
+pub mod ast_diff;
+pub mod ast_to_hunks;
+
+pub use parser::{Language, SyntaxDepth};
+
 use imara_diff::InternedInput;
 use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
@@ -79,6 +85,13 @@ pub enum DiffAlgorithm {
     Myers,
     Patience,
     Histogram,
+    /// Syntax-aware AST diffing using tree-sitter.
+    ///
+    /// When selected, the pipeline parses both files into concrete syntax trees
+    /// and performs a bottom-up container matching algorithm. Supported languages:
+    /// Rust, TypeScript, Python. Falls back to line-based if the language is
+    /// unsupported or the file exceeds the size gate.
+    Syntax,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -106,6 +119,13 @@ pub struct DiffRequest {
     /// warning, with empty hunks (best-effort).
     #[serde(default)]
     pub deadline_ms: Option<u64>,
+    /// Override language detection. When set, forces the language
+    /// for syntax-aware diffing instead of inferring from extension.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub language: Option<String>,
+    /// AST node depth for syntax-aware diffing.
+    #[serde(default)]
+    pub syntax_depth: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -256,6 +276,8 @@ pub fn compare_files_with_progress(
         request.algorithm,
         request.deadline_ms,
         progress,
+        request.language,
+        request.syntax_depth,
     ))
 }
 
@@ -271,6 +293,8 @@ pub fn compare_texts(
     algorithm: DiffAlgorithm,
     deadline_ms: Option<u64>,
     progress: Option<Box<dyn Fn(Progress) + Send>>,
+    explicit_language: Option<String>,
+    explicit_depth: Option<String>,
 ) -> DiffResult {
     // Normalise line endings before any other processing so that CRLF and LF
     // files produce identical diffs regardless of which entry-point is used
@@ -303,16 +327,24 @@ pub fn compare_texts(
                 &right_lines,
                 ms,
                 &mut warnings,
+                &left_path,
+                &right_path,
+                context,
+                &explicit_language,
+                &explicit_depth,
             )
         }
-        None => run_diff(algorithm, &normalized_left, &normalized_right, &left_lines, &right_lines),
+        None => run_diff(algorithm, &normalized_left, &normalized_right, &left_lines, &right_lines, &left_path, &right_path, context, &explicit_language, &explicit_depth),
     };
 
     // Annotate intraline (character-level) spans on adjacent delete/insert pairs.
-    if let Some(ref cb) = progress {
-        cb(Progress::ComputingIntralineSpans);
+    // Skip for Syntax diffs (AST already provides aligned spans).
+    if algorithm != DiffAlgorithm::Syntax {
+        if let Some(ref cb) = progress {
+            cb(Progress::ComputingIntralineSpans);
+        }
+        compute_intraline_spans(&mut lines);
     }
-    compute_intraline_spans(&mut lines);
 
     if let Some(ref cb) = progress {
         cb(Progress::BuildingHunks);
@@ -363,19 +395,86 @@ fn to_imara_algo(algo: DiffAlgorithm) -> imara_diff::Algorithm {
         DiffAlgorithm::Patience | DiffAlgorithm::Histogram => {
             imara_diff::Algorithm::Histogram
         }
+        // Syntax is handled by the calling code before reaching this function.
+        DiffAlgorithm::Syntax => imara_diff::Algorithm::Histogram,
     }
 }
 
 /// Run the diff algorithm directly on the calling thread (no deadline).
+///
+/// For `DiffAlgorithm::Syntax`, attempts tree-sitter AST diffing; falls back
+/// to line-based if the language is unsupported or parsing fails.
 fn run_diff(
     algorithm: DiffAlgorithm,
     normalized_left: &str,
     normalized_right: &str,
     left_lines: &[String],
     right_lines: &[String],
+    left_path: &Path,
+    right_path: &Path,
+    context: usize,
+    explicit_language: &Option<String>,
+    explicit_depth: &Option<String>,
 ) -> (DiffStats, Vec<LineChange>) {
+    if algorithm == DiffAlgorithm::Syntax {
+        let result = try_run_syntax_diff(left_path, right_path, normalized_left, normalized_right, left_lines, right_lines, context, explicit_language, explicit_depth);
+        match result {
+            Ok((stats, lines)) => return (stats, lines),
+            Err(()) => {
+                // Fall through to line-based with a silent fallback.
+            }
+        }
+    }
     let imara_algo = to_imara_algo(algorithm);
     build_changes_imara(imara_algo, normalized_left, normalized_right, left_lines, right_lines)
+}
+
+/// Attempt a tree-sitter syntax-aware diff. Returns `Err(())` if the language
+/// is unsupported or parsing failed, signalling the caller to fall back.
+fn try_run_syntax_diff(
+    left_path: &Path,
+    right_path: &Path,
+    normalized_left: &str,
+    normalized_right: &str,
+    left_lines: &[String],
+    right_lines: &[String],
+    context: usize,
+    explicit_language: &Option<String>,
+    explicit_depth: &Option<String>,
+) -> Result<(DiffStats, Vec<LineChange>), ()> {
+    // Detect language from file extension or explicit override.
+    let lang = explicit_language
+        .as_deref()
+        .and_then(parser::Language::from_name)
+        .or_else(|| parser::language_from_extension(left_path))
+        .or_else(|| parser::language_from_extension(right_path))
+        .ok_or(())?;
+
+    // Resolve syntax depth.
+    let depth = explicit_depth
+        .as_deref()
+        .and_then(parser::SyntaxDepth::from_name)
+        .unwrap_or_default();
+
+    // Size gate: skip AST parsing for files > 10K lines.
+    if left_lines.len() > 10_000 || right_lines.len() > 10_000 {
+        return Err(());
+    }
+
+    let mut left_nodes = parser::parse_file(normalized_left, lang, depth)
+        .map_err(|_| ())?;
+    let mut right_nodes = parser::parse_file(normalized_right, lang, depth)
+        .map_err(|_| ())?;
+    parser::build_child_links(&mut left_nodes);
+    parser::build_child_links(&mut right_nodes);
+
+    let ast_diff = ast_diff::compute_ast_diff(&left_nodes, &right_nodes);
+    let (stats, lines) = ast_to_hunks::ast_diff_to_hunks_full(
+        &ast_diff, &left_nodes, &right_nodes,
+        normalized_left, normalized_right,
+        left_lines, right_lines, context,
+    );
+    Ok((stats, lines))
 }
 
 /// Run the diff algorithm on a background thread, returning a best-effort
@@ -388,17 +487,26 @@ fn run_diff_with_deadline(
     right_lines: &[String],
     deadline_ms: u64,
     warnings: &mut Vec<String>,
+    left_path: &Path,
+    right_path: &Path,
+    context: usize,
+    explicit_language: &Option<String>,
+    explicit_depth: &Option<String>,
 ) -> (DiffStats, Vec<LineChange>) {
     // Clone the owned strings so they can be moved into the spawned thread.
     let nl = normalized_left.to_owned();
     let nr = normalized_right.to_owned();
     let ll = left_lines.to_vec();
     let rl = right_lines.to_vec();
+    let lp = left_path.to_path_buf();
+    let rp = right_path.to_path_buf();
+    let el = explicit_language.clone();
+    let ed = explicit_depth.clone();
 
     let (tx, rx) = mpsc::channel();
 
     std::thread::spawn(move || {
-        let result = run_diff(algorithm, &nl, &nr, &ll, &rl);
+        let result = run_diff(algorithm, &nl, &nr, &ll, &rl, &lp, &rp, context, &el, &ed);
         let _ = tx.send(result);
     });
 
@@ -989,6 +1097,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         assert_eq!(result.stats.additions, 1);
         assert_eq!(result.stats.deletions, 1);
@@ -1007,6 +1117,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1029,6 +1141,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1055,6 +1169,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         assert_eq!(result.files[0].hunks.len(), 2, "far-apart changes produce 2 hunks");
     }
@@ -1071,6 +1187,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1091,6 +1209,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         assert!(result.files[0].hunks.is_empty());
     }
@@ -1109,6 +1229,8 @@ mod tests {
             1,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1134,6 +1256,8 @@ mod tests {
             2,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1221,6 +1345,8 @@ mod tests {
             max_bytes: None,
             algorithm: DiffAlgorithm::Myers,
             deadline_ms: None,
+            language: None,
+            syntax_depth: None,
         });
         match result {
             Err(DiffError::BinaryFile { .. }) => {}
@@ -1245,6 +1371,8 @@ mod tests {
             max_bytes: None,
             algorithm: DiffAlgorithm::Myers,
             deadline_ms: None,
+            language: None,
+            syntax_depth: None,
         });
         match result {
             Err(DiffError::BinaryFile { .. }) => {}
@@ -1266,6 +1394,8 @@ mod tests {
             3,
             vec!["bad.txt contains invalid UTF-8".into()],
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1290,6 +1420,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         assert!(result.warnings.is_empty());
     }
@@ -1309,6 +1441,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1350,6 +1484,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1389,6 +1525,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1414,6 +1552,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1446,6 +1586,8 @@ mod tests {
             3,
             Vec::new(),
             DiffAlgorithm::Myers,
+            None,
+            None,
             None,
             None,
         );
@@ -1491,6 +1633,8 @@ mod tests {
             DiffAlgorithm::Myers,
             None,
             None,
+            None,
+            None,
         );
         let del = result.files[0].hunks[0]
             .lines
@@ -1527,6 +1671,8 @@ mod tests {
             max_bytes: None,
             algorithm: DiffAlgorithm::Myers,
             deadline_ms: None,
+            language: None,
+            syntax_depth: None,
         })
         .unwrap();
 
@@ -1585,6 +1731,8 @@ mod tests {
             max_bytes: None,
             algorithm: DiffAlgorithm::Myers,
             deadline_ms: None,
+            language: None,
+            syntax_depth: None,
         })
         .unwrap();
 
@@ -1618,6 +1766,8 @@ mod tests {
                 max_bytes: None,
                 algorithm: DiffAlgorithm::Myers,
                 deadline_ms: None,
+                language: None,
+                syntax_depth: None,
             },
             Some(Box::new(move |p| {
                 let label = match &p {

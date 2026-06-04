@@ -1,0 +1,12 @@
+{
+  "name": "syntax: identical TypeScript files",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "typescript",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 3,
+    "truncated": false
+  }
+}

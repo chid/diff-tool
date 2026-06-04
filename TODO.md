@@ -63,6 +63,11 @@ large new product surfaces.
 
 ## P5: Product USPs
 
+- [x] Research and implement tree-sitter syntax-aware AST diffing.
+      — Phases 0-5 complete (deps, parser, matching, hunk production, CLI flags,
+        fixtures, perf benchmarks).
+      — See [docs/tree-sitter-diffing.html](docs/tree-sitter-diffing.html).
+      — Branch: `feat/tree-sitter-syntax-diffing`.
 - [ ] Prototype diff triage ranking for risky files.
 - [ ] Prototype intent clustering for changed files.
 - [ ] Prototype agent-review workspace for comparing outputs from multiple

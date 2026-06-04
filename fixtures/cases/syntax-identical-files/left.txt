@@ -1,0 +1,7 @@
+fn hello() -> i32 {
+    42
+}
+
+fn world() {
+    println!("world");
+}

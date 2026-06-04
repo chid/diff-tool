@@ -1,0 +1,12 @@
+{
+  "name": "syntax: identical Python files",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "python",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 2,
+    "truncated": false
+  }
+}

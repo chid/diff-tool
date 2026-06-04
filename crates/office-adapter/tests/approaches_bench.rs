@@ -224,6 +224,8 @@ fn run_approach_1(
         DiffAlgorithm::Myers,
         None,
         None,
+        None,
+        None,
     ))
 }
 

@@ -1,0 +1,12 @@
+{
+  "name": "syntax: identical Rust files",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "rust",
+  "expected": {
+    "additions": 0,
+    "deletions": 0,
+    "unchanged": 7,
+    "truncated": false
+  }
+}

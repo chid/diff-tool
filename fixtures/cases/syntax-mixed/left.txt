@@ -1,0 +1,3 @@
+fn keep() { }
+fn remove() { }
+fn modify() { let x = 1; }

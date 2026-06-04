@@ -65,6 +65,32 @@ const cases = [
         lines(200_000, (i) => (i % 2 === 0 ? `${i}` : `${i}-x`)),
       ),
   },
+  {
+    name: 'syntax-equal-1k-fns',
+    quick: true,
+    generate: () => {
+      const fns = [];
+      for (let i = 0; i < 100; i++) {
+        fns.push(`fn func_${i}() -> i32 {\n    ${i}\n}\n`);
+      }
+      const content = fns.join('\n');
+      return pair(content, content);
+    },
+  },
+  {
+    name: 'syntax-sparse-fn-edit',
+    quick: true,
+    generate: () => {
+      const fns = [];
+      for (let i = 0; i < 100; i++) {
+        fns.push(`fn func_${i}() -> i32 {\n    ${i}\n}\n`);
+      }
+      const left = fns.join('\n');
+      // Edit every 20th function
+      const rightFns = fns.map((fn, i) => i % 20 === 0 ? fn.replace('i32', 'i64') : fn);
+      return pair(left, rightFns.join('\n'));
+    },
+  },
 ].filter((testCase) => !quick || testCase.quick);
 
 const build = spawnSync('cargo', ['build', '--release', '-q', '-p', 'diff-cli'], {
@@ -89,9 +115,12 @@ for (const testCase of cases) {
   writeFileSync(leftPath, left);
   writeFileSync(rightPath, right);
 
-  for (const algo of algorithms) {
+  const testAlgorithms = testCase.name.startsWith('syntax-')
+    ? [...algorithms, 'syntax'] : algorithms;
+  for (const algo of testAlgorithms) {
     const started = performance.now();
-    const args = ['diff', leftPath, rightPath, '--json', '--algorithm', algo];
+    const langFlag = algo === 'syntax' ? ['--language', 'rust'] : [];
+    const args = ['diff', leftPath, rightPath, '--json', '--algorithm', algo, ...langFlag];
     const run = spawnSync(binary, args, {
       cwd: root,
       encoding: 'utf8',

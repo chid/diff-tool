@@ -1,0 +1,12 @@
+{
+  "name": "syntax: function added",
+  "ignore": "none",
+  "algorithm": "syntax",
+  "language": "rust",
+  "expected": {
+    "additions": 1,
+    "deletions": 0,
+    "unchanged": 0,
+    "truncated": false
+  }
+}

@@ -1,13 +1,12 @@
 ---
 source: crates/diff-cli/tests/cli.rs
-assertion_line: 170
 expression: stdout
 ---
 {
   "files": [
     {
-      "left": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/multi-hunk/left.txt",
-      "right": "/Users/charley/dev/diff-tool/crates/diff-cli/../../fixtures/cases/multi-hunk/right.txt",
+      "left": "/Users/charley/dev/diff-tool-tree-sitter/crates/diff-cli/../../fixtures/cases/multi-hunk/left.txt",
+      "right": "/Users/charley/dev/diff-tool-tree-sitter/crates/diff-cli/../../fixtures/cases/multi-hunk/right.txt",
       "hunks": [
         {
           "old_range": {
