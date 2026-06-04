@@ -10,11 +10,14 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
+ai-adapter.workspace = true
 diff-core.workspace = true
 git-adapter.workspace = true
+office-adapter.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio = { version = "1", features = ["rt"] }
 toml = "0.8"
 
 [dev-dependencies]

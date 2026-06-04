@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tree-Sitter Syntax-Aware Diffing — Technical Write-Up</title>
+  <meta name="description" content="A detailed engineering plan for integrating tree-sitter AST parsing into the diff-tool pipeline to enable syntax-aware diffing with move/rename detection, semantic classification, and AST-aligned intraline highlights.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: hsl(220, 40%, 4%);
+      --bg-dark: hsl(220, 35%, 6%);
+      --bg-card: hsl(220, 30%, 10%);
+      --bg-card-hover: hsl(220, 25%, 13%);
+      --bg-elevated: hsl(220, 28%, 14%);
+      --text-main: hsl(210, 30%, 95%);
+      --text-muted: hsl(215, 18%, 65%);
+      --text-dim: hsl(215, 10%, 45%);
+
+      --green: hsl(145, 75%, 45%);
+      --green-glow: hsla(145, 75%, 45%, 0.12);
+      --green-subtle: hsla(145, 75%, 45%, 0.06);
+      --blue: hsl(200, 85%, 50%);
+      --blue-glow: hsla(200, 85%, 50%, 0.12);
+      --amber: hsl(35, 90%, 55%);
+      --amber-glow: hsla(35, 90%, 55%, 0.12);
+      --purple: hsl(263, 90%, 66%);
+      --purple-glow: hsla(263, 90%, 66%, 0.12);
+      --red: hsl(355, 75%, 55%);
+      --red-glow: hsla(355, 75%, 55%, 0.12);
+
+      --border-color: hsl(220, 20%, 16%);
+      --border-focus: hsl(145, 80%, 45%);
+
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-card: 0 8px 32px -12px rgba(0,0,0,0.5);
+      --shadow-premium: 0 16px 40px -12px hsla(0, 0%, 0%, 0.6);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--bg-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--green); }
+
+    .container { max-width: 1320px; margin: 0 auto; padding: 2rem 1.5rem 6rem; }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      background:
+        radial-gradient(circle at 0% 0%, hsla(145, 75%, 40%, 0.10), transparent 50%),
+        radial-gradient(circle at 100% 80%, hsla(200, 85%, 40%, 0.07), transparent 50%);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 3.5rem 3rem;
+      margin-bottom: 3rem;
+      overflow: hidden;
+      box-shadow: var(--shadow-premium);
+    }
+    .header-content { position: relative; z-index: 2; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: linear-gradient(135deg, var(--amber), var(--red));
+      color: hsl(220, 35%, 5%);
+      padding: 0.4rem 1.1rem; border-radius: 50px;
+      font-size: 0.78rem; font-weight: 700; font-family: var(--font-display);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.5rem;
+      box-shadow: 0 4px 15px hsla(35, 90%, 55%, 0.2);
+    }
+    .badge svg { width: 14px; height: 14px; }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: 3rem; font-weight: 800; line-height: 1.15;
+      background: linear-gradient(to right, #fff 45%, var(--text-muted) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 0.75rem; letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 1.12rem; color: var(--text-muted); max-width: 850px;
+    }
+
+    .header-meta {
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      margin-top: 1.5rem; border-top: 1px solid var(--border-color);
+      padding-top: 1.5rem;
+    }
+    .meta-chip {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 0.35rem 0.8rem;
+      font-size: 0.82rem; font-family: var(--font-mono); color: var(--text-muted);
+    }
+    .meta-chip strong { color: var(--green); font-weight: 500; }
+
+    /* ── Section Headers ── */
+    .section {
+      margin-bottom: 3rem;
+    }
+    .section-header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1.5rem; padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .section-number {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--green-glow); border: 1px solid hsla(145, 75%, 45%, 0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-size: 0.85rem; font-weight: 800;
+      color: var(--green); flex-shrink: 0;
+    }
+    .section-title {
+      font-family: var(--font-display); font-size: 1.6rem; font-weight: 700;
+      color: #fff;
+    }
+    .section-sub {
+      font-size: 0.92rem; color: var(--text-muted); margin-top: 0.25rem;
+    }
+
+    /* ── Pipeline ── */
+    .pipeline {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem;
+    }
+    .pipe-step {
+      display: flex; align-items: center; gap: 0.5rem;
+      background: var(--bg-elevated); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 0.5rem 0.9rem;
+      font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .pipe-step.highlight {
+      border-color: var(--green); color: var(--green);
+      background: var(--green-subtle);
+    }
+    .pipe-arrow { color: var(--text-dim); font-size: 1rem; }
+
+    .pipeline-branch {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+      width: 100%; margin-top: 0.75rem; padding-top: 0.75rem;
+      border-top: 1px dashed var(--border-color);
+    }
+    .branch-label {
+      font-family: var(--font-display); font-size: 0.7rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-dim); font-weight: 600; margin-right: 0.5rem;
+    }
+
+    /* ── Card Grids ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+
+    @media (max-width: 1024px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 20px; padding: 1.5rem;
+      transition: var(--transition); box-shadow: var(--shadow-card);
+    }
+    .card:hover {
+      border-color: var(--text-dim); transform: translateY(-2px);
+      box-shadow: var(--shadow-premium);
+    }
+
+    .card-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 0.75rem; margin-bottom: 0.75rem;
+    }
+    .card-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+    .card-icon.green { background: var(--green-glow); color: var(--green); }
+    .card-icon.blue { background: var(--blue-glow); color: var(--blue); }
+    .card-icon.amber { background: var(--amber-glow); color: var(--amber); }
+    .card-icon.purple { background: var(--purple-glow); color: var(--purple); }
+    .card-icon.red { background: var(--red-glow); color: var(--red); }
+
+    .card-title {
+      font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+      color: #fff; margin-bottom: 0.4rem;
+    }
+    .card-desc {
+      color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;
+    }
+    .card-desc code {
+      font-family: var(--font-mono); font-size: 0.85rem;
+      background: hsl(220, 20%, 8%); padding: 0.1rem 0.35rem;
+      border-radius: 4px; color: var(--blue);
+    }
+
+    .card-tag {
+      display: inline-block;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 500;
+      padding: 0.15rem 0.5rem; border-radius: 4px;
+      background: var(--green-subtle); color: var(--green);
+      border: 1px solid hsla(145, 75%, 45%, 0.15);
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      overflow-x: auto; margin-bottom: 1.5rem;
+    }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th {
+      font-family: var(--font-display); font-weight: 600;
+      text-align: left; padding: 0.6rem 0.8rem;
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-color);
+    }
+    td {
+      padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted); vertical-align: top;
+    }
+    td code { font-family: var(--font-mono); font-size: 0.82rem; color: var(--blue); }
+    tr:hover td { background: var(--bg-card-hover); }
+
+    /* ── Code Blocks ── */
+    pre {
+      background: hsl(220, 35%, 4%);
+      border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 1rem 1.2rem; overflow-x: auto;
+      margin-bottom: 1.2rem; font-size: 0.85rem;
+    }
+    pre code {
+      font-family: var(--font-mono); color: var(--text-main);
+      background: none; padding: 0; font-size: 0.85rem;
+    }
+    .pre-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .pre-header span {
+      font-family: var(--font-display); font-size: 0.7rem;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+
+    /* ── Feature Grid (Phase map) ── */
+    .phase-grid { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+
+    .phase-row {
+      display: grid; grid-template-columns: 72px 1fr;
+      gap: 1rem; align-items: start;
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 14px; padding: 1rem 1.2rem;
+      transition: var(--transition);
+    }
+    .phase-row:hover { border-color: var(--text-dim); }
+
+    .phase-badge {
+      font-family: var(--font-display); font-weight: 800; font-size: 0.75rem;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 0.3rem 0.6rem; border-radius: 6px; text-align: center;
+    }
+    .phase-badge.p0 { background: var(--green-glow); color: var(--green); border: 1px solid hsla(145, 75%, 45%, 0.2); }
+    .phase-badge.p1 { background: var(--blue-glow); color: var(--blue); border: 1px solid hsla(200, 85%, 50%, 0.2); }
+    .phase-badge.p2 { background: var(--amber-glow); color: var(--amber); border: 1px solid hsla(35, 90%, 55%, 0.2); }
+    .phase-badge.p3 { background: var(--purple-glow); color: var(--purple); border: 1px solid hsla(263, 90%, 66%, 0.2); }
+    .phase-badge.p4 { background: var(--red-glow); color: var(--red); border: 1px solid hsla(355, 75%, 55%, 0.2); }
+
+    .phase-content h3 {
+      font-family: var(--font-display); font-size: 1rem; font-weight: 700;
+      color: #fff; margin-bottom: 0.25rem;
+    }
+    .phase-content p {
+      color: var(--text-muted); font-size: 0.88rem;
+    }
+    .phase-content code {
+      font-family: var(--font-mono); font-size: 0.82rem;
+      background: hsl(220, 20%, 8%); padding: 0.1rem 0.3rem; border-radius: 3px;
+      color: var(--blue);
+    }
+
+    /* ── Risk Matrix ── */
+    .risk-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+
+    .risk-row {
+      display: grid; grid-template-columns: 1fr 80px 80px 1fr;
+      gap: 1rem; align-items: center;
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 0.8rem 1rem;
+    }
+    .risk-label { font-size: 0.9rem; color: var(--text-main); }
+    .risk-likelihood, .risk-impact {
+      font-family: var(--font-display); font-size: 0.75rem;
+      font-weight: 700; text-transform: uppercase; text-align: center;
+      padding: 0.2rem 0.4rem; border-radius: 4px;
+    }
+    .risk-likelihood.high { background: var(--red-glow); color: var(--red); }
+    .risk-likelihood.medium { background: var(--amber-glow); color: var(--amber); }
+    .risk-likelihood.low { background: var(--green-glow); color: var(--green); }
+    .risk-impact.high { background: var(--red-glow); color: var(--red); }
+    .risk-impact.medium { background: var(--amber-glow); color: var(--amber); }
+    .risk-impact.low { background: var(--green-glow); color: var(--green); }
+    .risk-mitigation { font-size: 0.82rem; color: var(--text-muted); }
+
+    /* ── Q&A Accordion ── */
+    .qa-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .qa-item {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 12px; overflow: hidden;
+    }
+    .qa-q {
+      padding: 1rem 1.2rem;
+      font-family: var(--font-display); font-size: 0.95rem; font-weight: 600;
+      color: #fff; cursor: pointer; display: flex; justify-content: space-between;
+      align-items: center; transition: var(--transition);
+      user-select: none;
+    }
+    .qa-q:hover { background: var(--bg-card-hover); }
+    .qa-q .toggle { color: var(--text-dim); transition: var(--transition); font-size: 1.2rem; }
+    .qa-q.open .toggle { transform: rotate(180deg); }
+    .qa-a {
+      padding: 0 1.2rem 1rem; color: var(--text-muted); font-size: 0.9rem;
+      display: none; line-height: 1.6;
+    }
+    .qa-a.open { display: block; }
+    .qa-a code {
+      font-family: var(--font-mono); font-size: 0.82rem;
+      background: hsl(220, 20%, 8%); padding: 0.1rem 0.3rem;
+      border-radius: 3px; color: var(--blue);
+    }
+
+    /* ── Inline tags ── */
+    .tag {
+      display: inline-block; font-family: var(--font-mono); font-size: 0.72rem;
+      font-weight: 500; padding: 0.15rem 0.45rem; border-radius: 4px;
+      margin: 0 0.1rem;
+    }
+    .tag.identical { background: hsla(145, 75%, 45%, 0.1); color: var(--green); }
+    .tag.modified { background: hsla(200, 85%, 50%, 0.1); color: var(--blue); }
+    .tag.moved { background: hsla(263, 90%, 66%, 0.1); color: var(--purple); }
+    .tag.renamed { background: hsla(35, 90%, 55%, 0.1); color: var(--amber); }
+    .tag.added { background: hsla(145, 75%, 45%, 0.15); color: var(--green); }
+    .tag.deleted { background: hsla(355, 75%, 55%, 0.15); color: var(--red); }
+    .tag.reformatted { background: hsla(200, 85%, 50%, 0.08); color: var(--text-muted); }
+
+    /* ── Glossary ── */
+    .glossary { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .glossary { grid-template-columns: 1fr; } }
+    .gloss-term { font-family: var(--font-mono); font-size: 0.85rem; color: var(--green); }
+    .gloss-def { color: var(--text-muted); font-size: 0.88rem; }
+
+    /* ── Divider ── */
+    hr { border: none; border-top: 1px solid var(--border-color); margin: 2.5rem 0; }
+
+    /* ── Footer nav ── */
+    .footer-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--border-color); padding-top: 2rem; margin-top: 3rem;
+    }
+    .footer-nav a {
+      color: var(--text-dim); text-decoration: none; font-family: var(--font-display);
+      font-size: 0.85rem; font-weight: 600; transition: var(--transition);
+    }
+    .footer-nav a:hover { color: var(--green); }
+
+    /* ── Collapsible Backlog ── */
+    .todo-collapse {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 14px; overflow: hidden;
+    }
+    .todo-header {
+      padding: 1rem 1.2rem; cursor: pointer; user-select: none;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .todo-header h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: #fff; }
+    .todo-header .toggle { color: var(--text-dim); transition: var(--transition); }
+    .todo-header.open .toggle { transform: rotate(180deg); }
+    .todo-body { padding: 0 1.2rem 1rem; display: none; }
+    .todo-body.open { display: block; }
+    .todo-item {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      padding: 0.4rem 0; color: var(--text-muted); font-size: 0.9rem;
+    }
+    .todo-item::before {
+      content: '☐'; color: var(--text-dim); font-size: 1rem; flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ═══════════════════ HEADER ═══════════════════ -->
+  <header>
+    <div class="header-content">
+      <span class="badge">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        Research &amp; Implementation Plan
+      </span>
+      <h1>Tree-Sitter Syntax-Aware Diffing</h1>
+      <p class="subtitle">
+        A detailed engineering plan for integrating tree-sitter AST parsing into the diff-tool
+        pipeline — enabling move/rename detection, semantic change classification, and
+        AST-aligned intraline highlights.
+      </p>
+      <div class="header-meta">
+        <span class="meta-chip"><strong>Status</strong> Investigation</span>
+        <span class="meta-chip"><strong>Priority</strong> P5 (Product USPs)</span>
+        <span class="meta-chip"><strong>MVP Languages</strong> Rust · TypeScript · Python</span>
+        <span class="meta-chip"><strong>Flag</strong> <code>--algorithm syntax</code></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ 1. OVERVIEW ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">1</span>
+      <div>
+        <h2 class="section-title">Overview &amp; Motivation</h2>
+        <p class="section-sub">Why tree-sitter AST diffing matters for code review</p>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">↕</div>
+        </div>
+        <h3 class="card-title">Move &amp; Rename Detection</h3>
+        <p class="card-desc">
+          A function moved within a file currently shows as a full delete + add.
+          Tree-sitter matches subtrees across files — a moved function is tagged
+          <span class="tag moved">moved</span> with a single deletion + addition pair.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">◎</div>
+        </div>
+        <h3 class="card-title">Semantic Classification</h3>
+        <p class="card-desc">
+          Each hunk gets a classification: <span class="tag modified">modified</span>,
+          <span class="tag moved">moved</span>, <span class="tag renamed">renamed</span>,
+          <span class="tag added">added</span>, <span class="tag deleted">deleted</span>,
+          <span class="tag reformatted">reformatted</span>. The UI can visually
+          differentiate logic changes from formatting-only noise.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon amber">▬</div>
+        </div>
+        <h3 class="card-title">AST-Aligned Intraline Spans</h3>
+        <p class="card-desc">
+          Current intraline spans are naive character prefix/suffix matching. With
+          tree-sitter, changed spans align to AST node boundaries — the highlighted
+          region matches what a developer would consider the "changed token."
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 2. PIPELINE ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">2</span>
+      <div>
+        <h2 class="section-title">Pipeline Integration</h2>
+        <p class="section-sub">Where tree-sitter fits in the existing diff flow</p>
+      </div>
+    </div>
+
+    <div style="font-family: var(--font-display); font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;">
+      Current (line-based) pipeline:
+    </div>
+    <div class="pipeline">
+      <span class="pipe-step">Read files</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Binary detect</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">UTF-8 validate</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Normalize endings</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Split lines</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">imara-diff compute</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Intraline spans</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Build hunks</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">DiffResult</span>
+    </div>
+
+    <div style="font-family: var(--font-display); font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.75rem; margin-top: 1.5rem; text-transform: uppercase; letter-spacing: 0.04em;">
+      With tree-sitter (branches at "Split lines"):
+    </div>
+    <div class="pipeline">
+      <span class="pipe-step">Read files</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Binary detect</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">UTF-8 validate</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Normalize endings</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step">Split lines</span>
+      <span class="pipe-arrow">→</span>
+
+      <div class="pipeline-branch">
+        <span class="branch-label">Line path (default)</span>
+        <span class="pipe-step">imara-diff compute</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">Intraline spans</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">Build hunks</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">DiffResult</span>
+      </div>
+
+      <div class="pipeline-branch">
+        <span class="branch-label">Syntax path (<code>--algorithm syntax</code>)</span>
+        <span class="pipe-step highlight">Parse CST</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step highlight">AST match</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step highlight">Classify changes</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step highlight">Produce hunks</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-step">DiffResult</span>
+      </div>
+    </div>
+
+    <p class="card-desc" style="margin-top: 1rem;">
+      When <code>--algorithm syntax</code> is set, the pipeline branches after line
+      normalization. If the language is unsupported or parsing fails, it falls back
+      silently to the line-based path with a warning. The <code>DiffResult</code>
+      types remain unchanged — only the content and classification of hunks differ.
+    </p>
+  </section>
+
+  <!-- ═══════════════════ 3. ALGORITHM ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">3</span>
+      <div>
+        <h2 class="section-title">Algorithm Design</h2>
+        <p class="section-sub">Parsing, bottom-up container matching, and change classification</p>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      3.1 Parsing Phase
+    </h3>
+
+    <p class="card-desc" style="margin-bottom: 1rem;">
+      For each file, detect language from extension, parse with tree-sitter, then
+      flatten the CST into a list of <code>AstNode</code> records. The depth is
+      configurable (<code>--syntax-depth</code>), defaulting to <strong>statement</strong>
+      level — function defs, class defs, if-blocks, loops — which keeps node count at
+      ~100–500 for a typical file.
+    </p>
+
+    <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="card">
+        <div class="pre-header">
+          <span>AstNode record</span>
+          <span class="card-tag">parser.rs</span>
+        </div>
+        <pre><code style="color: var(--text-muted);">struct AstNode {
+    id: usize,          // pre-order index
+    kind: String,       // "function_definition"
+    kind_id: u16,       // numeric kind from grammar
+    parent: Option&lt;usize&gt;,
+    children: Vec&lt;usize&gt;,
+    start_byte: usize,
+    end_byte: usize,
+    start_line: usize,
+    end_line: usize,
+    text: String,       // source slice
+    hash: u64,          // whitespace-stripped
+    named: bool,
+}</code></pre>
+      </div>
+      <div class="card">
+        <div class="pre-header">
+          <span>Language detection</span>
+          <span class="card-tag">parser.rs</span>
+        </div>
+        <pre><code style="color: var(--text-muted);">fn language_from_extension(path: &amp;Path)
+    -> Option&lt;SupportedLanguage&gt;
+{
+    match path.extension()?.to_str()? {
+        "rs"  => Some(Language::Rust),
+        "ts"  | "tsx" => Some(Language::TypeScript),
+        "py"  => Some(Language::Python),
+        "js"  | "jsx" => Some(Language::JavaScript),
+        "go"  => Some(Language::Go),
+        "c"   => Some(Language::C),
+        // ...
+        _     => None,  // fallback to lines
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      3.2 Matching Phase — Bottom-Up Container Matching
+    </h3>
+
+    <p class="card-desc" style="margin-bottom: 1rem;">
+      Adapted from GumTree's approach. The matching runs in three passes:
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
+      <div class="card" style="border-left: 3px solid var(--green);">
+        <h3 class="card-title">Pass 1: Hash-based container matching</h3>
+        <p class="card-desc">
+          Hash every node's content (whitespace-stripped). Group left and right nodes
+          by hash. Where a group has exactly one left and one right node, they match.
+          Walk from leaves upward: if a node's children all match (same count + hashes),
+          the parent is also matched.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--purple);">
+        <h3 class="card-title">Pass 2: Positional heuristic (moves/renames)</h3>
+        <p class="card-desc">
+          For unmatched named nodes, compare ancestry path signatures
+          (e.g. <code>"program > function_definition > block"</code>).
+          If two nodes share the same signature and similar content hash, mark as a
+          probable move or rename.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--amber);">
+        <h3 class="card-title">Pass 3: Bridge fallback</h3>
+        <p class="card-desc">
+          Any remaining unmatched line regions fall through to <code>imara-diff</code>
+          line-based diff inside each unmatched region. This ensures no content is
+          lost even if the AST matching misses something.
+        </p>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      3.3 Change Classification
+    </h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Classification</th><th>Detection Rule</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="tag identical">identical</span></td><td>Node matched, no content change</td></tr>
+          <tr><td><span class="tag modified">modified</span></td><td>Node matched, content differs (subtree changed)</td></tr>
+          <tr><td><span class="tag moved">moved</span></td><td>Node matched, but parent/position changed</td></tr>
+          <tr><td><span class="tag renamed">renamed</span></td><td>Node is a name-bearing identifier that changed</td></tr>
+          <tr><td><span class="tag added">added</span></td><td>Node exists only in right file</td></tr>
+          <tr><td><span class="tag deleted">deleted</span></td><td>Node exists only in left file</td></tr>
+          <tr><td><span class="tag reformatted">reformatted</span></td><td>Content identical after whitespace normalization</td></tr>
+          <tr><td><code>type_changed</code></td><td>Node kind changed (e.g. <code>if</code> → <code>switch</code>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      3.4 Hunk Production
+    </h3>
+
+    <p class="card-desc" style="margin-bottom: 1rem;">
+      The AST diff produces the same <code>Hunk</code> and <code>LineChange</code>
+      types as the existing pipeline, so no downstream changes are needed. An optional
+      <code>SemanticTag</code> field exposes the classification to the UI:
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="pre-header"><span>Hunk (extended)</span></div>
+        <pre><code style="color: var(--text-muted);">pub struct Hunk {
+    pub old_range: LineRange,
+    pub new_range: LineRange,
+    pub lines: Vec&lt;LineChange&gt;,
+    pub foldable_context: bool,
+    pub semantic_tag: Option&lt;SemanticTag&gt;,  // NEW
+}
+
+pub enum SemanticTag {  // NEW
+    Modified,
+    Moved,
+    Renamed,
+    Added,
+    Deleted,
+    Reformatted,
+    TypeChanged,
+}</code></pre>
+      </div>
+      <div class="card">
+        <div class="pre-header"><span>IntraSpan from AST</span></div>
+        <pre><code style="color: var(--text-muted);">// Current: char-level prefix/suffix
+// New: AST node byte span
+IntraSpan {
+    start: changed_node.start_byte,
+    len:   changed_node.end_byte
+           - changed_node.start_byte,
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 4. LANGUAGES ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">4</span>
+      <div>
+        <h2 class="section-title">Language Support</h2>
+        <p class="section-sub">Tiered rollout starting with Rust, TypeScript, and Python</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card" style="border-left: 3px solid var(--green);">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Tier 1 — MVP</h3>
+            <p class="card-desc" style="margin-top: 0.25rem;">Ship with these</p>
+          </div>
+        </div>
+        <table style="font-size: 0.85rem;">
+          <thead>
+            <tr><th>Language</th><th>Crate</th><th>Grammar</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Rust</td><td><code>tree-sitter-rust</code></td><td><code>rust</code></td></tr>
+            <tr><td>TypeScript</td><td><code>tree-sitter-typescript</code></td><td><code>typescript, tsx</code></td></tr>
+            <tr><td>Python</td><td><code>tree-sitter-python</code></td><td><code>python</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="border-left: 3px solid var(--text-dim);">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Tier 2 — Post-MVP</h3>
+            <p class="card-desc" style="margin-top: 0.25rem;">Add on demand</p>
+          </div>
+        </div>
+        <table style="font-size: 0.85rem;">
+          <thead><tr><th>Language</th><th>Crate</th></tr></thead>
+          <tbody>
+            <tr><td>JavaScript</td><td><code>tree-sitter-javascript</code></td></tr>
+            <tr><td>Go</td><td><code>tree-sitter-go</code></td></tr>
+            <tr><td>C</td><td><code>tree-sitter-c</code></td></tr>
+            <tr><td>C++</td><td><code>tree-sitter-cpp</code></td></tr>
+            <tr><td>Java</td><td><code>tree-sitter-java</code></td></tr>
+            <tr><td>JSON / YAML / TOML</td><td><code>tree-sitter-json</code> etc.</td></tr>
+            <tr><td>Markdown / HTML / CSS</td><td><code>tree-sitter-md</code> etc.</td></tr>
+            <tr><td>Shell / Ruby / PHP / Swift / Kotlin</td><td>Available</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 5. IMPLEMENTATION ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">5</span>
+      <div>
+        <h2 class="section-title">Implementation Plan</h2>
+        <p class="section-sub">Phased rollout across 5 phases</p>
+      </div>
+    </div>
+
+    <div class="phase-grid">
+      <div class="phase-row">
+        <div class="phase-badge p0">P0</div>
+        <div class="phase-content">
+          <h3>Dependency Setup</h3>
+          <p>
+            Add <code>tree-sitter</code>, <code>tree-sitter-rust</code>,
+            <code>tree-sitter-typescript</code>, <code>tree-sitter-python</code> to
+            <code>crates/diff-core/Cargo.toml</code>. Create module structure:
+            <code>parser.rs</code>, <code>ast_diff.rs</code>, <code>ast_to_hunks.rs</code>.
+            Add <code>Syntax</code> variant to <code>DiffAlgorithm</code> enum.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase-row">
+        <div class="phase-badge p1">P1</div>
+        <div class="phase-content">
+          <h3>Parser Module (<code>parser.rs</code>)</h3>
+          <p>
+            <code>Language</code> enum with grammar lookup. <code>FileLanguage</code>
+            detection from extension (+ <code>--language</code> CLI override).
+            <code>parse_file(text, lang) -> Vec&lt;AstNode&gt;</code> with statement-depth
+            filtering and whitespace-stripped content hashing. Parser reuse via
+            <code>Mutex&lt;Parser&gt;</code> pool. LruCache for repeated parses.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase-row">
+        <div class="phase-badge p2">P2</div>
+        <div class="phase-content">
+          <h3>AST Matching (<code>ast_diff.rs</code>)</h3>
+          <p>
+            <code>compute_ast_diff(left, right) -> AstDiff</code> implementing
+            bottom-up hash matching + positional move/rename heuristic + bridge
+            fallback to <code>imara-diff</code>. Output: <code>Vec&lt;NodeMatch&gt;</code>
+            with similarity scores and classifications.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase-row">
+        <div class="phase-badge p3">P3</div>
+        <div class="phase-content">
+          <h3>Hunk Production (<code>ast_to_hunks.rs</code>)</h3>
+          <p>
+            Convert <code>AstDiff</code> + source text to <code>Vec&lt;LineChange&gt;</code>
+            and <code>Vec&lt;Hunk&gt;</code>. Set <code>IntraSpan</code> byte ranges from
+            AST node boundaries. Add optional <code>SemanticTag</code> to <code>Hunk</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase-row">
+        <div class="phase-badge p4">P4</div>
+        <div class="phase-content">
+          <h3>CLI &amp; Desktop Integration</h3>
+          <p>
+            Add <code>--algorithm syntax</code>, <code>--language &lt;lang&gt;</code>,
+            <code>--syntax-depth &lt;level&gt;</code> CLI flags. Show semantic tags
+            in human-readable output. Desktop gets <code>SemanticTag</code> via IPC
+            automatically — no renderer changes needed.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 6. PERFORMANCE ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">6</span>
+      <div>
+        <h2 class="section-title">Performance Considerations</h2>
+        <p class="section-sub">Benchmark expectations, mitigations, and memory budget</p>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      Expected Benchmarks (estimates)
+    </h3>
+
+    <div class="table-wrap" style="margin-bottom: 2rem;">
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Line-Based</th><th>AST (statement)</th><th>AST (expression)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>equal-1k-lines</code></td><td>~180ms</td><td>~250ms</td><td>~350ms</td></tr>
+          <tr><td><code>sparse-edits</code></td><td>~3ms</td><td>~50ms</td><td>~80ms</td></tr>
+          <tr><td><code>whitespace-churn</code></td><td>~100ms</td><td>~120ms</td><td>~140ms</td></tr>
+          <tr><td><code>many-small-lines</code></td><td>~33s (Histogram)</td><td colspan="2" style="color: var(--amber);">Memory-bound — size gate applies</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      Mitigations
+    </h3>
+
+    <div class="grid-2" style="margin-bottom: 1.5rem;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">1</div>
+        </div>
+        <h3 class="card-title">Statement-level default depth</h3>
+        <p class="card-desc">Limits node count to ~100–500 per file instead of thousands of leaf tokens.</p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">2</div>
+        </div>
+        <h3 class="card-title">Deadline cancellation</h3>
+        <p class="card-desc">Existing <code>deadline_ms</code> in <code>DiffRequest</code> applies. If exceeded, fall back to line-based.</p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon amber">3</div>
+        </div>
+        <h3 class="card-title">File size gate</h3>
+        <p class="card-desc">Skip AST parsing for files &gt; 10K lines or &gt; 1 MB. Configurable via <code>--syntax-max-size</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">4</div>
+        </div>
+        <h3 class="card-title">Parser reuse &amp; caching</h3>
+        <p class="card-desc"><code>Mutex&lt;Parser&gt;</code> pool avoids re-allocation. LruCache by content hash for repeated parses in folder compare.</p>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;">
+      Memory Budget
+    </h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Resource</th><th>Budget per diff</th></tr></thead>
+        <tbody>
+          <tr><td>Source text (left + right)</td><td>~2× file size</td></tr>
+          <tr><td>CST nodes (left + right)</td><td>~1–2 MB per parsed file</td></tr>
+          <tr><td>AstNode records</td><td>~48 bytes per node</td></tr>
+          <tr><td>Total per file (1 MB source)</td><td>~3–4 MB</td></tr>
+          <tr><td>LruCache cap</td><td>50 entries (~200 MB max)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 7. TEST STRATEGY ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">7</span>
+      <div>
+        <h2 class="section-title">Test Strategy</h2>
+        <p class="section-sub">Fixtures, snapshots, and perf benchmarks</p>
+      </div>
+    </div>
+
+    <div class="section-sub" style="margin-bottom: 1rem;">
+      Create <code>fixtures/cases/syntax-*</code> directories covering:
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fixture</th><th>What It Tests</th></tr></thead>
+        <tbody>
+          <tr><td><code>syntax-equal</code></td><td>Identical files, no changes</td></tr>
+          <tr><td><code>syntax-rename</code></td><td>Function/variable rename detected</td></tr>
+          <tr><td><code>syntax-move</code></td><td>Function moved within file</td></tr>
+          <tr><td><code>syntax-refactor</code></td><td>Inline → extracted function</td></tr>
+          <tr><td><code>syntax-reformat</code></td><td>Only whitespace/formatting changes</td></tr>
+          <tr><td><code>syntax-mixed</code></td><td>Rename + logic change in same hunk</td></tr>
+          <tr><td><code>syntax-unsupported</code></td><td>Language not in MVP list → fallback</td></tr>
+          <tr><td><code>syntax-large-file</code></td><td>File &gt; threshold → fallback</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="card-desc">
+      Each fixture uses the standard <code>case.json</code> schema with optional
+      <code>"algorithm": "syntax"</code> and <code>"expected_classifications"</code>
+      to validate semantic tags. Existing snapshot tests apply directly since
+      <code>DiffResult</code> output format is unchanged.
+    </p>
+  </section>
+
+  <!-- ═══════════════════ 8. RISKS ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">8</span>
+      <div>
+        <h2 class="section-title">Risks &amp; Mitigations</h2>
+        <p class="section-sub">Identified risk areas and their countermeasures</p>
+      </div>
+    </div>
+
+    <div class="risk-grid">
+      <div class="risk-row">
+        <span class="risk-label">AST parsing too slow for large files</span>
+        <span class="risk-likelihood medium">Medium</span>
+        <span class="risk-impact high">High</span>
+        <span class="risk-mitigation">Size gate + deadline fallback to line-based diff</span>
+      </div>
+      <div class="risk-row">
+        <span class="risk-label">Grammar versions break across updates</span>
+        <span class="risk-likelihood low">Low</span>
+        <span class="risk-impact medium">Medium</span>
+        <span class="risk-mitigation">Lock grammar versions in Cargo.toml; CI pins them</span>
+      </div>
+      <div class="risk-row">
+        <span class="risk-label">Node matching worse than line-based on real code</span>
+        <span class="risk-likelihood medium">Medium</span>
+        <span class="risk-impact medium">Medium</span>
+        <span class="risk-mitigation">Always compare both; <code>syntax</code> is opt-in via flag</span>
+      </div>
+      <div class="risk-row">
+        <span class="risk-label">Mutex contention on Parser pool</span>
+        <span class="risk-likelihood low">Low</span>
+        <span class="risk-impact low">Low</span>
+        <span class="risk-mitigation">Thread-local pool or ObjectPool pattern</span>
+      </div>
+      <div class="risk-row">
+        <span class="risk-label">Language detection fails for edge-case extensions</span>
+        <span class="risk-likelihood low">Low</span>
+        <span class="risk-impact low">Low</span>
+        <span class="risk-mitigation"><code>--language</code> override flag + <code>.gitattributes</code> support</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 9. OPEN QUESTIONS ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">9</span>
+      <div>
+        <h2 class="section-title">Open Questions</h2>
+        <p class="section-sub">Items to investigate during implementation</p>
+      </div>
+    </div>
+
+    <div class="qa-list">
+      <div class="qa-item">
+        <div class="qa-q">Does tree-sitter parsing add acceptable overhead for &lt;5K line files? <span class="toggle">▾</span></div>
+        <div class="qa-a">Run perf suite with <code>--algorithm syntax</code> on all existing cases. Compare wall-clock time and memory against line-based baseline. Acceptable = &lt;2× overhead for &lt;5K line files.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">Can whitespace-normalized hashing reliably detect moves/renames? <span class="toggle">▾</span></div>
+        <div class="qa-a">Fixture: move a function to a different position in the same file; verify it's detected as <span class="tag moved">moved</span> not <span class="tag deleted">deleted</span> + <span class="tag added">added</span>. Test with content changes inside the moved block.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">How does node count affect matching time? <span class="toggle">▾</span></div>
+        <div class="qa-a">Synthetic files with 100/500/1000/2000/5000 statements; measure matching time at each size. Look for O(n²) inflection point.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">Does tree-sitter CST handle incremental edits? <span class="toggle">▾</span></div>
+        <div class="qa-a">Not needed for MVP (we always diff two static files), but relevant for live editing feature. Tree-sitter supports incremental parsing natively — note for future.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">What's the memory overhead of loading 3 grammars concurrently? <span class="toggle">▾</span></div>
+        <div class="qa-a">Profile with <code>heaptrack</code> or jemalloc stats. Each grammar is ~200–500 KB compiled. Load on demand, not at startup.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">Can we share a single Parser across rayon threads? <span class="toggle">▾</span></div>
+        <div class="qa-a"><code>tree_sitter::Parser</code> is not <code>Send</code>. Option: thread-local pool via <code>thread_local!</code> or <code>Mutex&lt;Parser&gt;</code>. Since folder compare diffs files in parallel, each rayon thread needs its own Parser.</div>
+      </div>
+      <div class="qa-item">
+        <div class="qa-q">Do all 3 MVP grammars compile cleanly on aarch64-macos? <span class="toggle">▾</span></div>
+        <div class="qa-a">Add them to deps and run <code>cargo build</code>. Tree-sitter grammars use C and may need a C compiler. Verify on CI's macOS ARM runner.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 10. BACKLOG ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">10</span>
+      <div>
+        <h2 class="section-title">Task Backlog</h2>
+        <p class="section-sub">Actionable work items in priority order</p>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header open">
+        <h3>Phase 0 — Dependency Setup</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body open">
+        <div class="todo-item">Add <code>tree-sitter</code> (v0.25) to <code>crates/diff-core/Cargo.toml</code></div>
+        <div class="todo-item">Add <code>tree-sitter-rust</code>, <code>tree-sitter-typescript</code>, <code>tree-sitter-python</code></div>
+        <div class="todo-item">Create module structure: <code>parser.rs</code>, <code>ast_diff.rs</code>, <code>ast_to_hunks.rs</code></div>
+        <div class="todo-item">Add <code>Syntax</code> variant to <code>DiffAlgorithm</code> enum in <code>lib.rs</code></div>
+        <div class="todo-item">Verify all 3 grammars compile on <code>aarch64-macos</code> + CI</div>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header">
+        <h3>Phase 1 — Parser Module</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body">
+        <div class="todo-item">Implement <code>Language</code> enum with grammar() fn returning <code>tree_sitter::Language</code></div>
+        <div class="todo-item">Implement <code>language_from_extension()</code> with extension + shebang detection</div>
+        <div class="todo-item">Implement <code>parse_file()</code> — parse + flatten CST to <code>Vec&lt;AstNode&gt;</code></div>
+        <div class="todo-item">Implement statement-depth node filtering (default)</div>
+        <div class="todo-item">Implement whitespace-stripped content hashing for each node</div>
+        <div class="todo-item">Build <code>Mutex&lt;Parser&gt;</code> pool with configurable size</div>
+        <div class="todo-item">Add <code>LruCache&lt;u64, Vec&lt;AstNode&gt;&gt;</code> keyed by content hash</div>
+        <div class="todo-item">Unit tests: known inputs produce expected node counts + types</div>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header">
+        <h3>Phase 2 — AST Matching</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body">
+        <div class="todo-item">Implement <code>compute_ast_diff(left, right) -> AstDiff</code></div>
+        <div class="todo-item">Pass 1: hash-bucket container matching with bottom-up parent collation</div>
+        <div class="todo-item">Pass 2: ancestry-path-signature matching for moves/renames</div>
+        <div class="todo-item">Pass 3: bridge fallback to <code>imara-diff</code> for unmatched regions</div>
+        <div class="todo-item">Compute similarity scores (0.0–1.0) for each match</div>
+        <div class="todo-item">Assign <code>ChangeClass</code> to each node pair</div>
+        <div class="todo-item">Unit tests: move, rename, refactor, reformat, mixed fixtures</div>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header">
+        <h3>Phase 3 — Hunk Production</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body">
+        <div class="todo-item">Add <code>SemanticTag</code> enum to <code>Hunk</code> struct</div>
+        <div class="todo-item">Convert <code>AstDiff</code> → <code>Vec&lt;LineChange&gt;</code> with AST-aligned <code>IntraSpan</code></div>
+        <div class="todo-item">Group adjacent AST changes into hunks using existing <code>build_hunks()</code></div>
+        <div class="todo-item">Inject context lines from sibling matched nodes</div>
+        <div class="todo-item">Handle moved blocks: emit as matched deletion + addition with <span class="tag moved">moved</span> tag</div>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header">
+        <h3>Phase 4 — CLI Integration</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body">
+        <div class="todo-item">Add <code>--algorithm syntax</code> to <code>AlgorithmArg</code> enum in CLI</div>
+        <div class="todo-item">Add <code>--language &lt;lang&gt;</code> override flag</div>
+        <div class="todo-item">Add <code>--syntax-depth &lt;statement|expression|token&gt;</code></div>
+        <div class="todo-item">Show <code>[semantic: moved]</code> annotations in human output</div>
+        <div class="todo-item">Wire <code>Syntax</code> into the pipeline branch in <code>compare_texts()</code></div>
+      </div>
+    </div>
+
+    <div class="todo-collapse">
+      <div class="todo-header">
+        <h3>Phase 5 — Fixtures, Tests &amp; Perf</h3>
+        <span class="toggle">▾</span>
+      </div>
+      <div class="todo-body">
+        <div class="todo-item">Create 8 syntax fixture directories under <code>fixtures/cases/syntax-*/</code></div>
+        <div class="todo-item">Add <code>expected_classifications</code> support to test runner</div>
+        <div class="todo-item">Add syntax scenarios to <code>scripts/measure-performance.mjs</code></div>
+        <div class="todo-item">Run <code>./scripts/check.sh</code> — all tests pass</div>
+        <div class="todo-item">Run <code>npm run perf:quick</code> — no regressions on line-based</div>
+        <div class="todo-item">Benchmark AST vs line-based on all perf cases; document results</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 11. GLOSSARY ═══════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-number">11</span>
+      <div>
+        <h2 class="section-title">Glossary</h2>
+      </div>
+    </div>
+
+    <div class="glossary">
+      <div class="gloss-term">CST</div>
+      <div class="gloss-def">Concrete Syntax Tree — the exact parse tree from tree-sitter, preserving all tokens including punctuation.</div>
+
+      <div class="gloss-term">AST</div>
+      <div class="gloss-def">Abstract Syntax Tree — a simplified CST. Terms used interchangeably in this document since tree-sitter produces a CST that we treat as an AST.</div>
+
+      <div class="gloss-term">GumTree</div>
+      <div class="gloss-def">A tree-diff algorithm that uses bottom-up container matching and hashing. Our approach is a simplified adaptation.</div>
+
+      <div class="gloss-term">Named node</div>
+      <div class="gloss-def">A tree-sitter node with a semantic name (e.g. <code>function_definition</code>). Distinguished from anonymous nodes which are syntax tokens (e.g. <code>(</code>, <code>)</code>).</div>
+
+      <div class="gloss-term">Statement depth</div>
+      <div class="gloss-def">Nodes at the level of statements, function defs, class defs, and block-level constructs. The default granularity for MVP.</div>
+
+      <div class="gloss-term">Expression depth</div>
+      <div class="gloss-def">Includes expression-level nodes (e.g. <code>binary_expression</code>, <code>call_expression</code>, <code>identifier</code>). More nodes, higher cost.</div>
+
+      <div class="gloss-term">Token depth</div>
+      <div class="gloss-def">All leaf nodes — every keyword, identifier, operator, and literal. Equivalent to character-level at the extreme end.</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ FOOTER ═══════════════════ -->
+  <hr>
+
+  <div class="footer-nav">
+    <a href="TODO.md">← TODO.md</a>
+    <a href="docs/ai-features.md">docs/ai-features.md →</a>
+  </div>
+
+</div>
+
+<script>
+  // ── Q&A Accordion ──
+  document.querySelectorAll('.qa-q').forEach(q => {
+    q.addEventListener('click', () => {
+      q.classList.toggle('open');
+      const a = q.nextElementSibling;
+      a.classList.toggle('open');
+    });
+  });
+
+  // ── Todo Collapse ──
+  document.querySelectorAll('.todo-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.classList.toggle('open');
+      const body = h.nextElementSibling;
+      body.classList.toggle('open');
+    });
+  });
+
+  // ── Open first Q&A item by default ──
+  const firstQa = document.querySelector('.qa-q');
+  if (firstQa) {
+    firstQa.classList.add('open');
+    firstQa.nextElementSibling.classList.add('open');
+  }
+</script>
+
+</body>
+</html>

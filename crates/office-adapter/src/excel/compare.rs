@@ -319,6 +319,61 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_workbooks_produce_no_sections() {
+        let sections = compare_workbooks(&[], &[]).unwrap();
+        assert!(sections.is_empty(), "comparing two empty workbooks should produce 0 sections");
+    }
+
+    #[test]
+    fn test_deleted_sheet_before_field_has_text() {
+        let sheet = single_cell_sheet("Quarterly Data");
+
+        let sections = compare_workbooks(
+            &[("Q1".to_owned(), sheet.as_bytes())],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Deleted);
+        assert_eq!(sections[0].changes.len(), 1);
+        assert_eq!(sections[0].changes[0].kind, OfficeAtomicChangeKind::TextDeleted);
+        let before = sections[0].changes[0].before.as_deref().unwrap();
+        assert!(before.contains("Quarterly Data"), "before text should have sheet content");
+        assert_eq!(sections[0].changes[0].after, None);
+    }
+
+    #[test]
+    fn test_added_sheet_after_field_has_text() {
+        let sheet = single_cell_sheet("New Data");
+
+        let sections = compare_workbooks(
+            &[],
+            &[("NewSheet".to_owned(), sheet.as_bytes())],
+        )
+        .unwrap();
+
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Added);
+        assert_eq!(sections[0].label, "NewSheet");
+        assert_eq!(sections[0].changes[0].kind, OfficeAtomicChangeKind::TextAdded);
+        assert_eq!(sections[0].changes[0].before, None);
+        let after = sections[0].changes[0].after.as_deref().unwrap();
+        assert!(after.contains("New Data"), "after text should have sheet content");
+    }
+
+    #[test]
+    fn test_sheet_id_format() {
+        let sheet = single_cell_sheet("val");
+        let sections = compare_workbooks(
+            &[("Sheet1".to_owned(), sheet.as_bytes())],
+            &[("Sheet1".to_owned(), sheet.as_bytes())],
+        )
+        .unwrap();
+        assert_eq!(sections[0].id, "sheet-1");
+    }
+
+    #[test]
     fn test_serialize_sections() {
         let sections = vec![OfficeSectionDiff {
             id: "sheet-1".to_owned(),

@@ -21,7 +21,7 @@ export const CATEGORIES: CategoryMeta[] = registryData.categories;
 
 // ─── Per-setting metadata for the UI ───────────────────────────────────────
 
-export type SettingControlType = 'toggle' | 'select' | 'number';
+export type SettingControlType = 'toggle' | 'select' | 'number' | 'text' | 'password';
 
 export interface SettingMeta {
   key: string;
@@ -30,6 +30,7 @@ export interface SettingMeta {
   category: string;
   control: SettingControlType;
   default: string | number | boolean;
+  placeholder?: string;
   options?: { label: string; value: string }[];
   min?: number;
   max?: number;
@@ -48,7 +49,7 @@ export const SETTINGS_REGISTRY: SettingMeta[] =
 // NOTE: Keep this union in sync with the categories array in settings-registry.json.
 // TypeScript can't derive precise literal types from JSON imports (they widen to string),
 // so the type must be maintained manually alongside the JSON.
-export type SettingsCategory = 'display' | 'algorithm' | 'performance' | 'interaction' | 'file';
+export type SettingsCategory = 'display' | 'algorithm' | 'performance' | 'interaction' | 'file' | 'ai';
 
 export interface SettingsState {
   // Display
@@ -83,6 +84,12 @@ export interface SettingsState {
   disableLineNumbers: boolean;
   disableFileHeader: boolean;
   disableBackground: boolean;
+
+  // AI
+  aiProvider: 'openai' | 'anthropic' | 'custom';
+  aiApiKey: string;
+  aiModel: string;
+  aiBaseUrl: string;
 }
 
 // ─── Defaults (derived from JSON at import time) ───────────────────────────

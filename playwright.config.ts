@@ -8,13 +8,13 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
 
   reporter: [
-    ['html', { outputFolder: '../target/e2e/report' }],
+    ['html', { outputFolder: 'target/e2e/report' }],
     ['list'],
   ],
 
   use: {
     baseURL: 'http://127.0.0.1:5173',
-    headless: false,
+    headless: process.env.PLAYWRIGHT_HEADED === '1' ? false : true,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',

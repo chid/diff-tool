@@ -27,10 +27,13 @@ pub mod unpack;
 pub mod word;
 pub mod xml_util;
 
+pub use models::{
+    ChangeStatus, OfficeAtomicChange, OfficeAtomicChangeKind, OfficeDiffOptions,
+    OfficeDiffResult, OfficeDiffSummary, OfficeFormat, OfficeSectionDiff, OfficeSectionKind,
+};
+
 use std::path::PathBuf;
 use thiserror::Error;
-
-use models::{ChangeStatus, OfficeDiffOptions, OfficeDiffResult, OfficeDiffSummary, OfficeFormat};
 
 // ── Error type ─────────────────────────────────────────────────────────
 

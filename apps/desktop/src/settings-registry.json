@@ -4,7 +4,8 @@
     { "key": "algorithm",    "label": "Diff Algorithm",   "description": "How diffs are computed and shown" },
     { "key": "performance",  "label": "Performance",      "description": "Worker threads and rendering budgets" },
     { "key": "interaction",  "label": "Interaction",      "description": "Hover, selection, and click behavior" },
-    { "key": "file",         "label": "File Display",     "description": "Headers, line numbers, and backgrounds" }
+    { "key": "file",         "label": "File Display",     "description": "Headers, line numbers, and backgrounds" },
+    { "key": "ai",           "label": "AI",               "description": "LLM provider and API key for AI features" }
   ],
 
   "settings": [
@@ -254,6 +255,44 @@
       "category": "file",
       "control": "toggle",
       "default": false
+    },
+
+    {
+      "key": "aiProvider",
+      "label": "LLM provider",
+      "description": "Which AI provider to use for summaries, commit messages, and risk assessments",
+      "category": "ai",
+      "control": "select",
+      "default": "openai",
+      "options": [
+        { "label": "OpenAI",    "value": "openai" },
+        { "label": "Anthropic", "value": "anthropic" },
+        { "label": "Custom",    "value": "custom" }
+      ]
+    },
+    {
+      "key": "aiApiKey",
+      "label": "API key",
+      "description": "Your LLM provider API key. Stored locally, never sent to external servers.",
+      "category": "ai",
+      "control": "password",
+      "default": ""
+    },
+    {
+      "key": "aiModel",
+      "label": "Model",
+      "description": "Override the default model (leave empty for provider default: gpt-4o-mini / claude-sonnet-4)",
+      "category": "ai",
+      "control": "text",
+      "default": ""
+    },
+    {
+      "key": "aiBaseUrl",
+      "label": "Base URL (custom)",
+      "description": "Custom API endpoint for OpenAI-compatible providers (e.g. Ollama, vLLM). Only used when provider is Custom.",
+      "category": "ai",
+      "control": "text",
+      "default": ""
     }
   ]
 }

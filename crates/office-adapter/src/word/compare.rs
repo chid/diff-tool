@@ -374,6 +374,247 @@ mod tests {
     }
 
     #[test]
+    fn test_style_only_change_produces_formatting_atomic() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Normal"/></w:pPr>
+      <w:r><w:t>Same text</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+      <w:r><w:t>Same text</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Modified);
+        assert_eq!(sections[0].changes.len(), 1);
+        assert_eq!(sections[0].changes[0].kind, OfficeAtomicChangeKind::FormattingChanged);
+        assert_eq!(sections[0].changes[0].before.as_deref(), Some("Normal"));
+        assert_eq!(sections[0].changes[0].after.as_deref(), Some("Heading1"));
+    }
+
+    #[test]
+    fn test_text_and_style_change_produces_two_atomics() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Normal"/></w:pPr>
+      <w:r><w:t>Old content</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
+      <w:r><w:t>New content</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Modified);
+        assert_eq!(sections[0].changes.len(), 2);
+        let kinds: Vec<&OfficeAtomicChangeKind> =
+            sections[0].changes.iter().map(|c| &c.kind).collect();
+        assert!(kinds.contains(&&OfficeAtomicChangeKind::TextChanged));
+        assert!(kinds.contains(&&OfficeAtomicChangeKind::FormattingChanged));
+    }
+
+    #[test]
+    fn test_paragraph_label_truncated_when_text_exceeds_60_chars() {
+        let long_text = "A".repeat(80);
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>{long_text}</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#
+        );
+
+        let sections = compare_documents(xml.as_bytes(), xml.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert!(sections[0].label.ends_with("..."), "label should end with '...' when text > 60 chars");
+        assert!(sections[0].label.len() < 80, "label should be shorter than full text");
+    }
+
+    #[test]
+    fn test_empty_paragraph_label_uses_empty_suffix() {
+        let xml = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p/>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(xml.as_bytes(), xml.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert!(sections[0].label.contains("(empty)"), "empty paragraph label should contain '(empty)'");
+    }
+
+    #[test]
+    fn test_deleted_paragraph_has_before_text_and_no_after() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Kept paragraph</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Removed paragraph</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Kept paragraph</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[1].status, ChangeStatus::Deleted);
+        assert_eq!(sections[1].changes.len(), 1);
+        assert_eq!(sections[1].changes[0].kind, OfficeAtomicChangeKind::TextDeleted);
+        assert_eq!(sections[1].changes[0].before.as_deref(), Some("Removed paragraph"));
+        assert_eq!(sections[1].changes[0].after, None);
+    }
+
+    #[test]
+    fn test_added_paragraph_has_after_text_and_no_before() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Original only</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Original only</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Brand new paragraph</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[1].status, ChangeStatus::Added);
+        assert_eq!(sections[1].changes.len(), 1);
+        assert_eq!(sections[1].changes[0].kind, OfficeAtomicChangeKind::TextAdded);
+        assert_eq!(sections[1].changes[0].before, None);
+        assert_eq!(sections[1].changes[0].after.as_deref(), Some("Brand new paragraph"));
+    }
+
+    #[test]
+    fn test_table_deleted_produces_deleted_section() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>
+      <w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body/>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        let table_section = sections.iter().find(|s| s.kind == OfficeSectionKind::WordTable);
+        assert!(table_section.is_some(), "should have a table section");
+        assert_eq!(table_section.unwrap().status, ChangeStatus::Deleted);
+    }
+
+    #[test]
+    fn test_table_added_produces_added_section() {
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body/>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>
+      <w:tr><w:tc><w:p><w:r><w:t>New cell</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        let table_section = sections.iter().find(|s| s.kind == OfficeSectionKind::WordTable);
+        assert!(table_section.is_some(), "should have a table section");
+        assert_eq!(table_section.unwrap().status, ChangeStatus::Added);
+    }
+
+    #[test]
+    fn test_table_dimension_change_produces_structure_change_atomic() {
+        // Left: 2×1 table; right: 2×2 table — dimensions change → StructureChanged.
+        let left = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+
+        let right = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblPr/>
+      <w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+
+        let sections = compare_documents(left.as_bytes(), right.as_bytes()).unwrap();
+        let table_section = sections.iter().find(|s| s.kind == OfficeSectionKind::WordTable).unwrap();
+        assert_eq!(table_section.status, ChangeStatus::Modified);
+        let has_structure_change = table_section.changes.iter().any(|c| {
+            c.kind == OfficeAtomicChangeKind::StructureChanged
+        });
+        assert!(has_structure_change, "should have a StructureChanged atomic for dimension change");
+    }
+
+    #[test]
     fn test_serialize_sections() {
         let sections = vec![OfficeSectionDiff {
             id: "para-0".to_owned(),

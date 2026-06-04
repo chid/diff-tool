@@ -10,9 +10,15 @@ tauri-build.workspace = true
 [dependencies]
 diff-core.workspace = true
 git-adapter.workspace = true
+ai-adapter.workspace = true
+office-adapter.workspace = true
 serde.workspace = true
 tauri.workspace = true
 tauri-plugin-dialog = "2.7.1"
+
+[dev-dependencies]
+serde_json.workspace = true
+tauri = { workspace = true, features = ["test"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

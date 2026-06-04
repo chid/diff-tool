@@ -22,9 +22,9 @@
     schemas.
   - Fix the perf harness to treat dt diff exit codes 0 and 1 as successful executions, parse JSON for both, and reserve failure for
     errors/timeouts.
-  - Make Rust DiffResult the MVP desktop rendering contract. Use the native renderer for shipped text diffs; keep @pierre/diffs only as
+  - [x] Make Rust DiffResult the MVP desktop rendering contract. Use the native renderer for shipped text diffs; keep @pierre/diffs only as
     fallback/spike code until a renderer ADR decides otherwise.
-  - Finish the desktop open flow: no hardcoded README.md/TODO.md defaults in Tauri mode; support left/right file dialogs, folder picker
+  - [x] Finish the desktop open flow: no hardcoded README.md/TODO.md defaults in Tauri mode; support left/right file dialogs, folder picker
     for scan, loading/error/empty states, and binary-file errors from Rust.
   - Keep MVP folder support scoped to single-root scan, not true left/right folder compare. Label UI and docs accordingly.
   - Clean CLI release behavior: keep documented dt diff exit codes; make nonexistent dt dir roots error instead of silently returning
@@ -38,13 +38,15 @@
 
   Required green checks before release:
 
+  - npm run test:mvp
   - npm run check
   - INSTA_UPDATE=no CARGO_HOME=/tmp/cargo-home cargo test --workspace
   - npm run build
+  - npm run test:e2e:mvp-boundary
   - npm run test:e2e:cli
   - npm run test:e2e after making Playwright headless-by-default and ensuring tests write only under target/e2e
   - npm run perf:quick after the exit-code fix
-  - npm run tauri -- build for the desktop artifact
+  - npm run test:mvp:package for the desktop artifact
 
   Coverage to add or fix:
 

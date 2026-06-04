@@ -83,6 +83,10 @@ export function DiffPane({ fileDiff, nativeDiff, loadState, onRetry, diffProgres
     );
   }
 
+  if (nativeDiff) {
+    return <NativeDiffRenderer diff={nativeDiff} />;
+  }
+
   if (!fileDiff) {
     return (
       <article className="diff-pane diff-pane-center" aria-label="No file selected">
@@ -96,19 +100,13 @@ export function DiffPane({ fileDiff, nativeDiff, loadState, onRetry, diffProgres
   }
 
   return (
-    <>
-      {nativeDiff ? (
-        <NativeDiffRenderer diff={nativeDiff} />
-      ) : (
-        <article className="diff-pane" aria-label="Text diff">
-          <FileDiff
-            fileDiff={fileDiff!}
-            disableWorkerPool={settings.disableWorkerPool}
-            options={settingsToFileDiffOptions(settings) as FileDiffOptions<undefined>}
-            style={{ minHeight: 0, flex: '1 1 auto' }}
-          />
-        </article>
-      )}
-    </>
+    <article className="diff-pane" aria-label="Text diff">
+      <FileDiff
+        fileDiff={fileDiff}
+        disableWorkerPool={settings.disableWorkerPool}
+        options={settingsToFileDiffOptions(settings) as FileDiffOptions<undefined>}
+        style={{ minHeight: 0, flex: '1 1 auto' }}
+      />
+    </article>
   );
 }

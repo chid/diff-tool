@@ -13,6 +13,29 @@ This runs:
 - TypeScript checks for the desktop app.
 - Rust tests for all workspace crates.
 
+## MVP Gate
+
+Run this before treating a branch as MVP-ready:
+
+```bash
+npm run test:mvp
+```
+
+This runs the TypeScript and Rust checks, the MVP boundary contract, all
+scripted CLI E2E tests, Playwright desktop/browser tests, and the quick
+performance suite. It is intentionally scoped to the MVP product: local text
+diff, CLI behavior, single-root folder scan, desktop rendering, and packaging
+readiness signals.
+
+Run the package smoke separately when you need a local macOS artifact:
+
+```bash
+npm run test:mvp:package
+```
+
+That command builds the Tauri app bundle. It is separated from `test:mvp`
+because it is slower and platform-specific.
+
 ## Rust Tests
 
 ```bash
@@ -94,6 +117,11 @@ npm run test:e2e:whitespace-case-ignore  # --ignore-whitespace-and-case (zero di
 npm run test:e2e:folder-scan             # Folder scan happy path
 npm run test:e2e:error-path             # CLI error paths (exit code 2)
 npm run test:e2e:context               # --context flag hunk grouping
+npm run test:e2e:progress-diff          # dt diff --progress stderr/stdout split
+npm run test:e2e:progress-dir           # dt dir --right --progress behavior
+npm run test:e2e:config                 # isolated CLI config get/set/reset
+npm run test:e2e:mvp-boundary           # MVP claim and script contract
+npm run test:e2e:office                 # experimental Office CLI, not in MVP gate
 ```
 
 Playwright-based E2E tests verify the desktop renderer:
@@ -110,3 +138,8 @@ Each test:
 - Asserts JSON output shape, exit codes, and expected stats.
 - Writes instrumentation to `target/e2e/*.json`.
 - Exits `0` on pass and non-zero on failure.
+
+Office, AI, image, merge, Git, and true left/right folder comparison tests are
+post-MVP unless explicitly included in `npm run test:mvp`. If those crates or
+routes remain in the workspace, they still need to stay green under the Rust
+workspace tests and their own explicit scripts.

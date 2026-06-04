@@ -306,6 +306,61 @@ mod tests {
     }
 
     #[test]
+    fn test_subtitle_placeholder_gets_title_prefix() {
+        // subTitle is a variant of the title placeholder and should get [title] prefix.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="1" name="Subtitle"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="subTitle"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:t>Subtitle Text</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"#;
+
+        let text = extract_slide_text(xml.as_bytes()).unwrap();
+        assert!(text.contains("[title] Subtitle Text"), "subTitle type should get [title] prefix");
+    }
+
+    #[test]
+    fn test_body_placeholder_gets_body_prefix() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="1" name="Content"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="body"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:t>Body content</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"#;
+
+        let text = extract_slide_text(xml.as_bytes()).unwrap();
+        assert!(text.contains("[body] Body content"), "body type should get [body] prefix");
+    }
+
+    #[test]
     fn test_extract_slide_ctr_title() {
         // Center title placeholder.
         let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

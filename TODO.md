@@ -51,7 +51,8 @@ large new product surfaces.
 - [x] Phase 2: Wire `scan_tree` for live file tree entries.
 - [x] Phase 3: File open dialogs (`openFolderDialog`), drag and drop (`tauri://drag-drop`), command-line args (`getLaunchArgs`).
 - [ ] Phase 4: Decision on Rust-format vs. pierre-format diff output.
-- [ ] TODO: Update Rust diff-cli to output `FileDiffMetadata`-compatible JSON directly, eliminating the TypeScript `parseDiffFromFile` converter layer.
+- [x] TODO: Make Rust `DiffResult` the MVP desktop rendering contract for Tauri two-file comparisons and single-file previews.
+  The plain Vite demo still uses `@pierre/diffs` sample data for browser-only examples; the desktop path no longer falls back to hardcoded README/TODO defaults.
 
 ## P4: Merge, Image, And Advanced Diff Modes
 
@@ -72,6 +73,14 @@ large new product surfaces.
 - [ ] Prototype intent clustering for changed files.
 - [ ] Prototype agent-review workspace for comparing outputs from multiple
       coding agents.
+- [ ] Add agent live-monitor view: watch agents (Claude Code, Copilot, etc.)
+      as they produce diffs, see each file change appear inline in real-time,
+      and review/halt/approve per-hunk before the agent moves on.
+- [ ] Research: does using tree-sitter for syntax-aware AST diffing improve
+      inline detection or perf vs. line-based only? If yes, gate by file
+      type and add a `--algorithm syntax` flag.
+      — See [docs/tree-sitter-diffing.html](docs/tree-sitter-diffing.html) for
+      the full technical plan.
 - [ ] Add evidence-linked summaries only after deterministic source anchors are
       available.
 

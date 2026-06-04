@@ -7,6 +7,9 @@ import {
   Cpu,
   MousePointer,
   File,
+  Brain,
+  EyeOff,
+  Eye,
   Dot,
 } from 'lucide-react';
 import { useSettings } from './SettingsContext';
@@ -27,6 +30,7 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<any>> = {
   performance: Cpu,
   interaction: MousePointer,
   file: File,
+  ai: Brain,
 };
 
 // ─── Control renderers ─────────────────────────────────────────────────────
@@ -141,6 +145,114 @@ function SettingNumber({
   );
 }
 
+function SettingText({
+  value,
+  placeholder,
+  onChange,
+  label,
+}: {
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const [local, setLocal] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
+  const commit = (raw: string) => {
+    onChange(raw);
+  };
+
+  return (
+    <input
+      type="text"
+      className="setting-text"
+      value={local}
+      placeholder={placeholder}
+      aria-label={label}
+      onChange={(e) => {
+        setLocal(e.target.value);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => commit(e.target.value), 400);
+      }}
+      onBlur={(e) => {
+        clearTimeout(timer.current);
+        commit(e.target.value);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          clearTimeout(timer.current);
+          commit(e.currentTarget.value);
+        }
+      }}
+    />
+  );
+}
+
+function SettingPassword({
+  value,
+  placeholder,
+  onChange,
+  label,
+}: {
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const [local, setLocal] = useState(value);
+  const [visible, setVisible] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
+  const commit = (raw: string) => {
+    onChange(raw);
+  };
+
+  return (
+    <div className="setting-password-wrap">
+      <input
+        type={visible ? 'text' : 'password'}
+        className="setting-text"
+        value={local}
+        placeholder={placeholder}
+        aria-label={label}
+        onChange={(e) => {
+          setLocal(e.target.value);
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => commit(e.target.value), 400);
+        }}
+        onBlur={(e) => {
+          clearTimeout(timer.current);
+          commit(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            clearTimeout(timer.current);
+            commit(e.currentTarget.value);
+          }
+        }}
+      />
+      <button
+        type="button"
+        className="setting-password-toggle"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? 'Hide API key' : 'Show API key'}
+        title={visible ? 'Hide API key' : 'Show API key'}
+      >
+        {visible ? <EyeOff size={14} /> : <Eye size={14} />}
+      </button>
+    </div>
+  );
+}
+
 function SettingControl({
   value,
   meta,
@@ -175,6 +287,24 @@ function SettingControl({
           min={meta.min ?? 0}
           max={meta.max ?? 100}
           onChange={onChange as (v: number) => void}
+          label={meta.label}
+        />
+      );
+    case 'text':
+      return (
+        <SettingText
+          value={value as string}
+          placeholder={meta.placeholder}
+          onChange={onChange as (v: string) => void}
+          label={meta.label}
+        />
+      );
+    case 'password':
+      return (
+        <SettingPassword
+          value={value as string}
+          placeholder={meta.placeholder}
+          onChange={onChange as (v: string) => void}
           label={meta.label}
         />
       );

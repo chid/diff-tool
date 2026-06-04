@@ -340,6 +340,49 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_presentations_produce_no_sections() {
+        let sections = compare_presentations(&[], &[]).unwrap();
+        assert!(sections.is_empty(), "comparing two empty presentations should produce 0 sections");
+    }
+
+    #[test]
+    fn test_deleted_slide_before_field_has_full_text() {
+        let slide = title_body_slide("Deleted Title", "Deleted body content.");
+
+        let sections = compare_presentations(&[slide.as_bytes()], &[]).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Deleted);
+        assert_eq!(sections[0].changes.len(), 1);
+        assert_eq!(sections[0].changes[0].kind, OfficeAtomicChangeKind::TextDeleted);
+        let before = sections[0].changes[0].before.as_deref().unwrap();
+        assert!(before.contains("Deleted Title"), "before text should include slide title");
+        assert!(before.contains("Deleted body content."), "before text should include slide body");
+        assert_eq!(sections[0].changes[0].after, None);
+    }
+
+    #[test]
+    fn test_added_slide_after_field_has_full_text() {
+        let slide = title_body_slide("New Title", "New body content.");
+
+        let sections = compare_presentations(&[], &[slide.as_bytes()]).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].status, ChangeStatus::Added);
+        assert_eq!(sections[0].changes.len(), 1);
+        assert_eq!(sections[0].changes[0].kind, OfficeAtomicChangeKind::TextAdded);
+        assert_eq!(sections[0].changes[0].before, None);
+        let after = sections[0].changes[0].after.as_deref().unwrap();
+        assert!(after.contains("New Title"), "after text should include slide title");
+        assert!(after.contains("New body content."), "after text should include slide body");
+    }
+
+    #[test]
+    fn test_slide_id_format() {
+        let slide = minimal_slide("Content");
+        let sections = compare_presentations(&[slide.as_bytes()], &[slide.as_bytes()]).unwrap();
+        assert_eq!(sections[0].id, "slide-1");
+    }
+
+    #[test]
     fn test_serialize_sections() {
         let sections = vec![OfficeSectionDiff {
             id: "slide-1".to_owned(),

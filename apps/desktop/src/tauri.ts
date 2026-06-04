@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { DiffResult, DirEntryDiff } from './types';
+import type { DiffResult, DirEntryDiff, OfficeDiffResult, AiCompareRequest, AiCompareResponse } from './types';
 
 export interface CompareFilesOptions {
   algorithm?: 'myers' | 'histogram' | 'patience';
@@ -67,4 +67,26 @@ export async function openFolderDialog(): Promise<string | null> {
   });
   if (result === null || Array.isArray(result)) return null;
   return result;
+}
+
+/** Compare two Office documents (.docx, .pptx, .xlsx) via the Tauri backend. */
+export async function compareOffice(
+  left: string,
+  right: string,
+  sheets?: string[],
+): Promise<OfficeDiffResult> {
+  return invoke<OfficeDiffResult>('compare_office', {
+    request: {
+      left,
+      right,
+      sheets: sheets ?? [],
+    },
+  });
+}
+
+/** Send a chat completion to an LLM provider via the Tauri backend. */
+export async function compareAi(
+  request: AiCompareRequest,
+): Promise<AiCompareResponse> {
+  return invoke<AiCompareResponse>('compare_ai', { request });
 }

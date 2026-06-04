@@ -7,9 +7,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { execSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
 
-const FIXTURE_JSON = 'apps/desktop/public/cli-fixture.json';
 const SMOKE_URL = '/?test=cli-smoke';
 
 const HUNK_HEADER = '.hunk-header';
@@ -45,19 +43,16 @@ test.describe('Desktop render smoke test — CLI-backed DiffResult', () => {
   let cliDiff: Record<string, unknown>;
 
   test.beforeAll(() => {
-    // Ensure target directories exist
-    try { mkdirSync('apps/desktop/public', { recursive: true }); } catch { /* exists */ }
-    try { mkdirSync('target/e2e', { recursive: true }); } catch { /* exists */ }
-
     cliDiff = runCliDiff();
-    writeFileSync(FIXTURE_JSON, JSON.stringify(cliDiff));
-  });
-
-  test.afterAll(() => {
-    try { unlinkSync(FIXTURE_JSON); } catch { /* already gone */ }
   });
 
   test.beforeEach(async ({ page }) => {
+    await page.route('**/cli-fixture.json', async (route) => {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify(cliDiff),
+      });
+    });
     await page.goto(SMOKE_URL);
     // Wait for the diff grid to be visible (handles both loading and immediate-load cases).
     await expect(page.locator(DIFF_GRID)).toBeVisible({ timeout: 15_000 });

@@ -1,9 +1,11 @@
 mod config;
 
+use ai_adapter::{AiAdapter, BackendConfig, Provider, RiskLevel};
 use clap::{Parser, Subcommand, ValueEnum};
 use diff_core::{DiffAlgorithm, DiffError, DiffMode, DiffRequest, IgnoreMode};
 use git_adapter::EntryStatus;
 use rayon::prelude::*;
+
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process;
@@ -125,10 +127,74 @@ enum Command {
         #[command(subcommand)]
         command: GitCommand,
     },
+    /// Compare Office documents (.docx, .pptx, .xlsx).
+    Office {
+        #[command(subcommand)]
+        command: OfficeCommand,
+    },
+    /// AI-powered diff analysis (summaries, commit messages, risk assessment).
+    Ai {
+        /// LLM provider: openai, anthropic, or custom.
+        #[arg(long, default_value = "openai")]
+        provider: String,
+        /// API key (or set OPENAI_API_KEY / ANTHROPIC_API_KEY env var).
+        #[arg(long)]
+        api_key: Option<String>,
+        /// Model name (provider-specific default if omitted).
+        #[arg(long)]
+        model: Option<String>,
+        /// Base URL override (required for custom provider).
+        #[arg(long)]
+        base_url: Option<String>,
+        /// Read diff from file instead of stdin.
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Output as JSON (default for AI commands).
+        #[arg(long)]
+        json: bool,
+        #[command(subcommand)]
+        command: AiCommand,
+    },
     /// Manage persistent CLI configuration (~/.config/diff-tool/config.toml).
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OfficeCommand {
+    /// Compare two Office documents.
+    Diff {
+        left: PathBuf,
+        right: PathBuf,
+        /// Output as JSON instead of human-readable summary.
+        #[arg(long)]
+        json: bool,
+        /// For Excel: only compare these sheets (comma-separated).
+        #[arg(long, value_delimiter = ',')]
+        sheets: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AiCommand {
+    /// Generate a change summary from a diff.
+    GenerateSummary {
+        /// Language of the changed code (affects prompt phrasing).
+        #[arg(long, default_value = "text")]
+        language: String,
+    },
+    /// Generate a conventional commit message from a diff.
+    GenerateCommitMsg,
+    /// Assess the risk level of a code change.
+    AssessRisk {
+        /// The file path the diff applies to.
+        #[arg(long)]
+        file_path: String,
+        /// Language of the changed code.
+        #[arg(long, default_value = "text")]
+        language: String,
     },
 }
 
@@ -319,9 +385,240 @@ fn run(args: Args) -> i32 {
             eprintln!("error: dt git install is not implemented yet");
             EXIT_ERROR
         }
+        Command::Office { command } => run_office(command),
+        Command::Ai { provider, api_key, model, base_url, file, json, command } => {
+            run_ai(provider, api_key, model, base_url, file, json, command)
+        }
         Command::Config { command } => run_config(command),
     }
 }
+
+/// Handle `dt ai` subcommands.
+fn run_ai(
+    provider: String,
+    api_key: Option<String>,
+    model: Option<String>,
+    base_url: Option<String>,
+    file: Option<PathBuf>,
+    json: bool,
+    command: AiCommand,
+) -> i32 {
+    // 1. Resolve API key: flag > env var > prompt for error.
+    let api_key = match api_key.or_else(|| resolve_api_key_from_env(&provider)) {
+        Some(k) if !k.is_empty() => k,
+        _ => {
+            eprintln!("error: no API key provided. Use --api-key or set");
+            let env_var = match provider.as_str() {
+                "anthropic" => "ANTHROPIC_API_KEY",
+                _ => "OPENAI_API_KEY",
+            };
+            eprintln!("       the {env_var} environment variable.");
+            return EXIT_ERROR;
+        }
+    };
+
+    // 2. Read diff text from file or stdin.
+    let diff_text = match read_diff_text(file.as_ref()) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return EXIT_ERROR;
+        }
+    };
+
+    if diff_text.trim().is_empty() {
+        eprintln!("error: empty diff input");
+        return EXIT_ERROR;
+    }
+
+    // 3. Build BackendConfig.
+    let provider_enum = match provider.as_str() {
+        "anthropic" => Provider::Anthropic,
+        "custom" => Provider::Custom,
+        _ => Provider::OpenAI,
+    };
+    let model = model.unwrap_or_else(|| {
+        match provider_enum {
+            Provider::OpenAI => "gpt-4o-mini",
+            Provider::Anthropic => "claude-sonnet-4-20250514",
+            Provider::Custom => "",
+        }
+        .to_string()
+    });
+    let config = BackendConfig {
+        provider: provider_enum,
+        api_key,
+        model,
+        base_url,
+        ..Default::default()
+    };
+
+    // 4. Create AiAdapter.
+    let adapter = match AiAdapter::new(config) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("error: failed to create AI adapter: {e}");
+            return EXIT_ERROR;
+        }
+    };
+
+    // 5. Build the ChatRequest using the prompts module.
+    let chat_request = match &command {
+        AiCommand::GenerateSummary { language } => {
+            ai_adapter::prompts::build_summary_request(
+                adapter.config().model.as_str(),
+                &diff_text,
+                language,
+            )
+        }
+        AiCommand::GenerateCommitMsg => {
+            ai_adapter::prompts::build_commit_msg_request(
+                adapter.config().model.as_str(),
+                &diff_text,
+            )
+        }
+        AiCommand::AssessRisk { file_path, language } => {
+            ai_adapter::prompts::build_risk_request(
+                adapter.config().model.as_str(),
+                file_path,
+                &diff_text,
+                language,
+            )
+        }
+    };
+
+    // 6. Call the LLM.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create tokio runtime");
+    let response = match rt.block_on(adapter.complete(chat_request)) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: AI request failed: {e}");
+            return EXIT_ERROR;
+        }
+    };
+
+    // 7 & 8. Parse and output.
+    match &command {
+        AiCommand::GenerateSummary { .. } => {
+            match ai_adapter::prompts::parse_summary_response(&response.content) {
+                Ok(summary) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&summary) {
+                            println!("{j}");
+                        }
+                    } else {
+                        println!("Summary: {}", summary.summary);
+                        if !summary.intents.is_empty() {
+                            println!("Intents:");
+                            for intent in &summary.intents {
+                                println!("  - {intent}");
+                            }
+                        }
+                        if !summary.risks.is_empty() {
+                            println!("Risks:");
+                            for risk in &summary.risks {
+                                println!("  - {risk}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse AI response: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+        AiCommand::GenerateCommitMsg => {
+            match ai_adapter::prompts::parse_commit_msg_response(&response.content) {
+                Ok(msg) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&msg) {
+                            println!("{j}");
+                        }
+                    } else {
+                        println!("{}", msg.subject);
+                        if let Some(body) = &msg.body {
+                            if !body.trim().is_empty() {
+                                println!();
+                                println!("{body}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse AI response: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+        AiCommand::AssessRisk { .. } => {
+            match ai_adapter::prompts::parse_risk_response(&response.content) {
+                Ok(risk) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&risk) {
+                            println!("{j}");
+                        }
+                    } else {
+                        let level_str = match risk.risk_level {
+                            RiskLevel::Low => "LOW",
+                            RiskLevel::Medium => "MEDIUM",
+                            RiskLevel::High => "HIGH",
+                        };
+                        println!("Risk level: {level_str}");
+                        println!("Justification: {}", risk.justification);
+                        if !risk.affected_areas.is_empty() {
+                            println!("Affected areas:");
+                            for area in &risk.affected_areas {
+                                println!("  - {area}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse AI response: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+    }
+
+    EXIT_SUCCESS
+}
+
+/// Resolve API key from environment variable based on provider.
+fn resolve_api_key_from_env(provider: &str) -> Option<String> {
+    match provider {
+        "anthropic" => std::env::var("ANTHROPIC_API_KEY").ok(),
+        _ => std::env::var("OPENAI_API_KEY").ok(),
+    }
+}
+
+/// Read diff text from a file or stdin.
+fn read_diff_text(file: Option<&PathBuf>) -> std::io::Result<String> {
+    use std::io::Read;
+    match file {
+        Some(path) => std::fs::read_to_string(path),
+        None => {
+            let mut buf = String::new();
+            std::io::stdin().read_to_string(&mut buf)?;
+            Ok(buf)
+        }
+    }
+}
+
+
 
 /// Handle `dt config` subcommands.
 fn run_config(cmd: ConfigCommand) -> i32 {
@@ -392,6 +689,165 @@ fn run_config(cmd: ConfigCommand) -> i32 {
                 }
             }
         }
+    }
+}
+
+/// Handle `dt office` subcommands.
+fn run_office(cmd: OfficeCommand) -> i32 {
+    match cmd {
+        OfficeCommand::Diff { left, right, json, sheets } => {
+            let mut opts = office_adapter::OfficeDiffOptions::default();
+            if !sheets.is_empty() {
+                opts.sheets = sheets;
+            }
+
+            match office_adapter::compare_office_files(left, right, opts) {
+                Ok(result) => {
+                    // Print warnings to stderr.
+                    for w in &result.warnings {
+                        eprintln!("warning: {w}");
+                    }
+
+                    if json {
+                        match serde_json::to_string_pretty(&result) {
+                            Ok(j) => println!("{j}"),
+                            Err(e) => {
+                                eprintln!("error: failed to serialise JSON: {e}");
+                                return EXIT_ERROR;
+                            }
+                        }
+                    } else {
+                        print_office_human_summary(&result);
+                    }
+
+                    let has_changes = result.summary.sections_total > 0
+                        && (result.summary.sections_added > 0
+                            || result.summary.sections_deleted > 0
+                            || result.summary.sections_changed > 0);
+                    if has_changes {
+                        EXIT_DIFFERENCES
+                    } else {
+                        EXIT_SUCCESS
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    EXIT_ERROR
+                }
+            }
+        }
+    }
+}
+
+fn office_format_label(f: office_adapter::OfficeFormat) -> &'static str {
+    match f {
+        office_adapter::OfficeFormat::Word => "Word",
+        office_adapter::OfficeFormat::PowerPoint => "PowerPoint",
+        office_adapter::OfficeFormat::Excel => "Excel",
+    }
+}
+
+fn print_office_human_summary(result: &office_adapter::OfficeDiffResult) {
+    let label = office_format_label(result.format);
+    let s = &result.summary;
+
+    let mut parts: Vec<String> = Vec::new();
+    if s.sections_added > 0 {
+        parts.push(format!("{} added", s.sections_added));
+    }
+    if s.sections_deleted > 0 {
+        parts.push(format!("{} deleted", s.sections_deleted));
+    }
+    if s.sections_changed > 0 {
+        parts.push(format!("{} changed", s.sections_changed));
+    }
+    if s.sections_unchanged > 0 {
+        parts.push(format!("{} unchanged", s.sections_unchanged));
+    }
+
+    let change_summary = if parts.is_empty() {
+        "no changes".to_owned()
+    } else {
+        parts.join(", ")
+    };
+
+    println!(
+        "{label} document: {sections_total} sections, {change_summary}",
+        sections_total = s.sections_total,
+    );
+
+    if s.total_atomic_changes > 0 {
+        println!("  {} atomic changes", s.total_atomic_changes);
+
+        for section in &result.sections {
+            if section.changes.is_empty() {
+                continue;
+            }
+            for change in &section.changes {
+                let kind = office_atomic_kind_label(change.kind.clone());
+                let label_str = &section.label;
+                match (change.before.as_deref(), change.after.as_deref()) {
+                    (Some(before), Some(after)) => {
+                        let diff_preview = abbreviate_diff(before, after);
+                        println!("    {kind} in {label_str} ({diff_preview})");
+                    }
+                    (Some(before), None) => {
+                        let short = abbreviate_text(before);
+                        println!("    {kind} in {label_str}: {short}");
+                    }
+                    (None, Some(after)) => {
+                        let short = abbreviate_text(after);
+                        println!("    {kind} in {label_str}: {short}");
+                    }
+                    (None, None) => {
+                        println!("    {kind} in {label_str}");
+                    }
+                }
+            }
+        }
+    }
+
+    if !result.unsupported_features.is_empty() {
+        println!("  Unsupported features:");
+        for f in &result.unsupported_features {
+            println!("    - {f}");
+        }
+    }
+}
+
+fn office_atomic_kind_label(kind: office_adapter::OfficeAtomicChangeKind) -> &'static str {
+    match kind {
+        office_adapter::OfficeAtomicChangeKind::TextChanged => "Text changed",
+        office_adapter::OfficeAtomicChangeKind::TextAdded => "Text added",
+        office_adapter::OfficeAtomicChangeKind::TextDeleted => "Text deleted",
+        office_adapter::OfficeAtomicChangeKind::StructureChanged => "Structure changed",
+        office_adapter::OfficeAtomicChangeKind::FormattingChanged => "Formatting changed",
+        office_adapter::OfficeAtomicChangeKind::ImageChanged => "Image changed",
+        office_adapter::OfficeAtomicChangeKind::FormulaChanged => "Formula changed",
+        office_adapter::OfficeAtomicChangeKind::SheetRenamed => "Sheet renamed",
+        office_adapter::OfficeAtomicChangeKind::SlideReordered => "Slide reordered",
+    }
+}
+
+/// Shorten a single text value to at most 60 chars for human output.
+fn abbreviate_text(text: &str) -> String {
+    let one_line = text.replace('\n', " | ");
+    if one_line.len() <= 60 {
+        one_line
+    } else {
+        format!("{}…", &one_line[..59])
+    }
+}
+
+/// Make a compact "before → after" preview for human output.
+fn abbreviate_diff(before: &str, after: &str) -> String {
+    let b = abbreviate_text(before);
+    let a = abbreviate_text(after);
+    // Limit total output.
+    if b.len() + a.len() <= 50 {
+        format!("{b} → {a}")
+    } else {
+        format!("{}… → {}…", &b[..b.len().min(22)], &a[..a.len().min(22)])
     }
 }
 

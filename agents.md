@@ -104,12 +104,12 @@ in `ROUGH_EDGES.md`.
 
 In order:
 
-1. **Tree-siter Phases 4-5** — CLI flags and fixtures/perf (on `feat/tree-sitter-syntax-diffing`)
-2. **Desktop open flow (Phase 3)** — Wire live Tauri IPC so the desktop app calls real Rust backends.
+1. **Desktop open flow (Phase 3)** — Wire live Tauri IPC so the desktop app calls real Rust backends.
    See `docs/tauri-ipc-wiring-plan.md`. Phase 1 and 2 are done.
-3. **Desktop rendering contract** — Decide Rust's `FileDiffMetadata` vs `@pierre/diffs` format.
-4. **Office cleanup** — Suppress compiler warnings, document as experimental.
-5. **Packaging prep** — Bundle config, icons, macOS preview build.
+2. **Desktop rendering contract** — Decide Rust's `FileDiffMetadata` vs `@pierre/diffs` format.
+3. **Office cleanup** — Suppress compiler warnings, document as experimental.
+4. **Packaging prep** — Bundle config, icons, macOS preview build.
+5. **SemanticTag on Hunk** — Add `ChangeClass` to Hunk for per-hunk badges in desktop UI.
 
 ## Known Performance Baseline
 

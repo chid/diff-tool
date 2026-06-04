@@ -13,13 +13,13 @@ const FEATURES = [
   },
   {
     icon: Layers3,
-    title: 'Folder compare',
-    desc: 'Recursive directory scan with left/right tree navigation.',
+    title: 'Folder scan',
+    desc: 'Single-root recursive scans with tree navigation for the MVP.',
   },
   {
     icon: Image,
-    title: 'Image diff',
-    desc: 'Visual pixel comparison with overlay and side-by-side views.',
+    title: 'Roadmap modes',
+    desc: 'Image, merge, Git, Office, and AI workflows stay post-MVP.',
   },
   {
     icon: TerminalSquare,
@@ -41,8 +41,8 @@ export function WelcomeHero({ onExplore }: WelcomeHeroProps) {
           Fast, accurate text diffing — powered by Rust, rendered with React.
         </p>
         <p className="welcome-subtitle">
-          Compare files, folders, and images with a native desktop experience.
-          Open two files or drag-and-drop a folder to get started.
+          Compare text files and scan local folders with a native desktop
+          experience. Open two files or drag-and-drop one folder to get started.
         </p>
         <div className="welcome-actions">
           <button className="welcome-btn welcome-btn-primary" onClick={onExplore} type="button">
