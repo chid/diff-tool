@@ -4,7 +4,14 @@
 
 Cross-platform, local-first diff and merge tool prototype powered by a high-performance Rust core and Pierre UI.
 
-👉 **[Try the Live Web Demo](https://chid.github.io/diff-tool/)** (Interactive live diff playground, syntax-aware tree-sitter diffing, and CLI simulator).
+👉 **[Try the Live Web Demo](https://chid.github.io/diff-tool/)** (Interactive diff playground, GitHub PR & commit review, syntax-aware tree-sitter diffing, and CLI simulator).
+
+### Review Public GitHub PRs & Commits
+You can inspect and review any public GitHub pull request or commit URL in the live demo:
+- **Direct PR link**: [`https://chid.github.io/diff-tool/?pr=facebook/react#28000`](https://chid.github.io/diff-tool/?pr=facebook/react#28000)
+- **Shorthand targets**: `owner/repo#prNumber` (e.g. `facebook/react#28000`, `tailwindlabs/tailwindcss#14000`) or `owner/repo@sha`
+- **Full URLs**: Paste any `https://github.com/.../pull/...` or `.../commit/...` URL
+- **Side-by-side split & unified view**: Fast syntax highlighting, intraline character spans, and file list navigation powered by `@pierre/diffs`.
 
 The current repository is a working scaffold, not a finished product. It has a
 Rust backend, a Tauri/React desktop shell, fixture-driven tests, example inputs,

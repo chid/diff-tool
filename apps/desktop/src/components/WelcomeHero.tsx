@@ -1,34 +1,36 @@
-import { SplitSquareHorizontal, GitBranch, Layers3, Image, TerminalSquare, ArrowRight } from 'lucide-react';
+import { SplitSquareHorizontal, GitBranch, GitPullRequest, Layers3, TerminalSquare, ArrowRight } from 'lucide-react';
 
 interface WelcomeHeroProps {
-  /** Callback when user clicks one of the CTA buttons. */
+  /** Callback when user clicks explore examples button. */
   onExplore?: () => void;
+  /** Callback when user clicks review GitHub PR button. */
+  onReviewGitHub?: () => void;
 }
 
 const FEATURES = [
   {
+    icon: GitPullRequest,
+    title: 'GitHub PR & Commit Review',
+    desc: 'Review any public GitHub PR or commit directly in the browser via Pierre diffs.',
+  },
+  {
     icon: GitBranch,
-    title: 'Text diff',
-    desc: 'Myers & histogram algorithms with intraline character-level spans.',
+    title: 'Text diff & Intraline',
+    desc: 'Myers & histogram algorithms with intraline character-level precision.',
   },
   {
     icon: Layers3,
     title: 'Folder scan',
-    desc: 'Single-root recursive scans with tree navigation for the MVP.',
-  },
-  {
-    icon: Image,
-    title: 'Roadmap modes',
-    desc: 'Image, merge, Git, Office, and AI workflows stay post-MVP.',
+    desc: 'Recursive folder comparison with tree navigation and diff badges.',
   },
   {
     icon: TerminalSquare,
     title: 'CLI + Desktop',
-    desc: 'Same Rust engine powers both the CLI and native Tauri desktop app.',
+    desc: 'Deterministic Rust engine powers both the CLI and web/Tauri app.',
   },
 ];
 
-export function WelcomeHero({ onExplore }: WelcomeHeroProps) {
+export function WelcomeHero({ onExplore, onReviewGitHub }: WelcomeHeroProps) {
   return (
     <div className="welcome-hero">
       <section className="welcome-banner">
@@ -38,17 +40,23 @@ export function WelcomeHero({ onExplore }: WelcomeHeroProps) {
           <span className="welcome-badge">v0.1.0</span>
         </div>
         <p className="welcome-tagline">
-          Fast, accurate text diffing — powered by Rust, rendered with React.
+          Fast, accurate diffing — powered by Rust & Pierre diffs.
         </p>
         <p className="welcome-subtitle">
-          Compare text files and scan local folders with a native desktop
-          experience. Open two files or drag-and-drop one folder to get started.
+          Review GitHub pull requests, compare text files, and explore syntax-aware
+          diffs with high-speed side-by-side split rendering.
         </p>
         <div className="welcome-actions">
-          <button className="welcome-btn welcome-btn-primary" onClick={onExplore} type="button">
+          {onReviewGitHub && (
+            <button className="welcome-btn welcome-btn-primary" onClick={onReviewGitHub} type="button">
+              <GitPullRequest size={16} />
+              Review GitHub PR
+              <ArrowRight size={14} />
+            </button>
+          )}
+          <button className="welcome-btn welcome-btn-secondary" onClick={onExplore} type="button">
             <Layers3 size={16} />
-            Explore live examples
-            <ArrowRight size={14} />
+            Try Playground
           </button>
         </div>
       </section>

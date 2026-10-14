@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play, Sparkles } from 'lucide-react';
+import { FilePlus2, FileMinus2, GitBranch, GitPullRequest, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play, Sparkles } from 'lucide-react';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -10,6 +10,7 @@ import { DemoGallery } from './components/DemoGallery';
 import { WelcomeHero } from './components/WelcomeHero';
 import { Playground } from './components/Playground';
 import { CliSimulator } from './components/CliSimulator';
+import { GitHubReview } from './components/GitHubReview';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
 import { isTauri } from './tauriDetect';
@@ -67,8 +68,9 @@ function AppInner() {
   const [leftFolderPath, setLeftFolderPath] = useState<string | undefined>(undefined);
   const [rightFolderPath, setRightFolderPath] = useState<string | undefined>(undefined);
   const [dropOverlay, setDropOverlay] = useState(false);
-  const [viewMode, setViewMode] = useState<'changes' | 'playground' | 'cli' | 'gallery'>(() => {
+  const [viewMode, setViewMode] = useState<'changes' | 'playground' | 'cli' | 'gallery' | 'github'>(() => {
     const p = new URLSearchParams(window.location.search);
+    if (p.get('pr') || p.get('commit') || p.get('tab') === 'github') return 'github';
     if (p.get('tab') === 'playground' || p.get('demo') === 'playground') return 'playground';
     if (p.get('tab') === 'cli' || p.get('demo') === 'cli') return 'cli';
     if (p.get('demo') === 'gallery') return 'gallery';
@@ -520,6 +522,13 @@ function AppInner() {
             <GitBranch size={16} /> Changes
           </button>
           <button
+            className={viewMode === 'github' ? 'active' : ''}
+            onClick={() => setViewMode('github')}
+            type="button"
+          >
+            <GitPullRequest size={16} /> GitHub Review
+          </button>
+          <button
             className={viewMode === 'playground' ? 'active' : ''}
             onClick={() => setViewMode('playground')}
             type="button"
@@ -685,7 +694,9 @@ function AppInner() {
             </a>
           </div>
         </header>
-        {viewMode === 'playground' ? (
+        {viewMode === 'github' ? (
+          <GitHubReview />
+        ) : viewMode === 'playground' ? (
           <Playground />
         ) : viewMode === 'cli' ? (
           <CliSimulator />
@@ -693,7 +704,10 @@ function AppInner() {
           <DemoGallery onBack={() => setViewMode('changes')} />
         ) : loadState.phase === 'idle' ? (
           <article className="diff-pane" aria-label="Welcome">
-            <WelcomeHero onExplore={() => setViewMode('playground')} />
+            <WelcomeHero
+              onExplore={() => setViewMode('playground')}
+              onReviewGitHub={() => setViewMode('github')}
+            />
           </article>
         ) : (
           <DiffPane
