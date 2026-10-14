@@ -12,6 +12,7 @@ path = "src/main.rs"
 clap.workspace = true
 ai-adapter.workspace = true
 diff-core.workspace = true
+diff-tui.workspace = true
 git-adapter.workspace = true
 office-adapter.workspace = true
 rayon.workspace = true

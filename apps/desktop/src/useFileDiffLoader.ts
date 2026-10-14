@@ -5,7 +5,7 @@ import type { ChangeKind, LoadState, DiffResult, DiffProgress, LineChange } from
 import { isTauri } from './tauriDetect';
 import { readFileText, compareFiles, type CompareFilesOptions } from './tauri';
 import { useSettings } from './components/SettingsContext';
-import { sampleOldFile, sampleNewFile, sampleStats } from './sampleData';
+import { sampleOldFile, sampleNewFile, sampleStats, sampleFileMap } from './sampleData';
 import { listen } from '@tauri-apps/api/event';
 
 function lineChangesFromText(text: string, kind: Exclude<ChangeKind, 'context'>): LineChange[] {
@@ -57,13 +57,16 @@ export function buildSingleFilePreviewDiff(path: string, text: string, side: 'le
  * - Only `rightPath` provided: loads the file as all-additions (single-file preview).
  * - Neither provided: stays idle until the user opens files or a folder.
  *
- * In Vite dev mode (no Tauri), uses hardcoded sample data regardless of paths.
+ * In browser mode (no Tauri):
+ * - If `customFiles` are provided, diffs them directly.
+ * - Otherwise maps `leftPath`/`rightPath` to `sampleFileMap`.
  *
- * Re-triggers when `leftPath`, `rightPath`, or `retryKey` changes.
+ * Re-triggers when `leftPath`, `rightPath`, `customFiles`, or `retryKey` changes.
  */
 export function useFileDiffLoader(
   leftPath?: string,
   rightPath?: string,
+  customFiles?: { left?: FileContents; right?: FileContents } | null,
 ): {
   state: LoadState;
   stats: { additions: number; deletions: number; unchanged: number };
@@ -83,11 +86,35 @@ export function useFileDiffLoader(
 
     async function load() {
       if (!isTauri) {
-        // Vite dev mode — use hardcoded mock data
-        const fileDiff = parseDiffFromFile(sampleOldFile, sampleNewFile);
+        if (customFiles?.left && customFiles?.right) {
+          const fileDiff = parseDiffFromFile(customFiles.left, customFiles.right);
+          let additions = 0, deletions = 0, unchanged = 0;
+          for (const hunk of fileDiff.hunks) {
+            additions += hunk.additionLines;
+            deletions += hunk.deletionLines;
+            unchanged += Math.max(0, hunk.splitLineCount - hunk.additionLines);
+          }
+          if (!cancelled) {
+            setState({ phase: 'loaded', fileDiff });
+            setStats({ additions, deletions, unchanged });
+            setNativeDiff(null);
+            setDiffProgress(null);
+          }
+          return;
+        }
+
+        const targetPath = rightPath || leftPath || 'src/App.tsx';
+        const target = sampleFileMap[targetPath] || sampleFileMap['src/App.tsx'];
+        const fileDiff = parseDiffFromFile(target.oldFile, target.newFile);
+        let additions = 0, deletions = 0, unchanged = 0;
+        for (const hunk of fileDiff.hunks) {
+          additions += hunk.additionLines;
+          deletions += hunk.deletionLines;
+          unchanged += Math.max(0, hunk.splitLineCount - hunk.additionLines);
+        }
         if (!cancelled) {
           setState({ phase: 'loaded', fileDiff });
-          setStats(sampleStats);
+          setStats({ additions, deletions, unchanged });
           setNativeDiff(null);
           setDiffProgress(null);
         }
@@ -159,7 +186,7 @@ export function useFileDiffLoader(
 
     load();
     return () => { cancelled = true; };
-  }, [leftPath, rightPath, retryKey, settings.diffAlgorithm, settings.defaultDeadline]);
+  }, [leftPath, rightPath, customFiles, retryKey, settings.diffAlgorithm, settings.defaultDeadline]);
 
   const retry = useCallback(() => {
     setNativeDiff(null);

@@ -11,3 +11,16 @@ npm-debug.log*
 .antigravitycli
 /handoff.html
 
+# Ignored benchmark test samples
+fixtures/cases/pelican-providers/
+
+# Transient & personal files
+/*.html
+/docs/*.html
+.claude/
+test-results/
+playwright-report/
+why-mcp-what-use-case
+sounds.md
+next-steps2.md
+update.md

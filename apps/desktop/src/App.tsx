@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play } from 'lucide-react';
+import { FilePlus2, FileMinus2, GitBranch, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play, Sparkles } from 'lucide-react';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -8,11 +8,14 @@ import { BrowserTestHarness } from './components/BrowserTestHarness';
 import { NativeDiffRenderer } from './components/NativeDiffRenderer';
 import { DemoGallery } from './components/DemoGallery';
 import { WelcomeHero } from './components/WelcomeHero';
+import { Playground } from './components/Playground';
+import { CliSimulator } from './components/CliSimulator';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
 import { isTauri } from './tauriDetect';
 import { openFileDialog, openFolderDialog, pathIsDir, getLaunchArgs, compareAi } from './tauri';
 import { listen } from '@tauri-apps/api/event';
+import type { FileContents } from '@pierre/diffs';
 import type { DiffResult, DiffProgress, OfficeDiffResult, AiCompareRequest, AiCompareResponse } from './types';
 
 // ── Static DiffResult from examples/text-basic fixture ─────────────────
@@ -61,7 +64,19 @@ function AppInner() {
   const [leftPath, setLeftPath] = useState<string | undefined>(undefined);
   const [rightPath, setRightPath] = useState<string | undefined>(undefined);
   const [rootPath, setRootPath] = useState<string | undefined>(undefined);
+  const [leftFolderPath, setLeftFolderPath] = useState<string | undefined>(undefined);
+  const [rightFolderPath, setRightFolderPath] = useState<string | undefined>(undefined);
   const [dropOverlay, setDropOverlay] = useState(false);
+  const [viewMode, setViewMode] = useState<'changes' | 'playground' | 'cli' | 'gallery'>(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('tab') === 'playground' || p.get('demo') === 'playground') return 'playground';
+    if (p.get('tab') === 'cli' || p.get('demo') === 'cli') return 'cli';
+    if (p.get('demo') === 'gallery') return 'gallery';
+    return 'changes';
+  });
+  const [customFiles, setCustomFiles] = useState<{ left?: FileContents; right?: FileContents } | null>(null);
+  const fileInputLeftRef = useRef<HTMLInputElement>(null);
+  const fileInputRightRef = useRef<HTMLInputElement>(null);
   const dropCounter = useRef(0);
   const { settings, updateSetting } = useSettings();
 
@@ -70,6 +85,17 @@ function AppInner() {
     if (!isTauri) return;
     getLaunchArgs().then(async (args) => {
       if (args.length === 0) return;
+      // Two args: check if both are directories
+      if (args.length >= 2) {
+        const isDir0 = await pathIsDir(args[0]);
+        const isDir1 = await pathIsDir(args[1]);
+        if (isDir0 && isDir1) {
+          setLeftFolderPath(args[0]);
+          setRightFolderPath(args[1]);
+          setRootPath(undefined);
+          return;
+        }
+      }
       // First positional arg as directory or left file
       const first = args[0];
       const firstIsDir = await pathIsDir(first);
@@ -114,11 +140,26 @@ function AppInner() {
       const paths = event.payload;
       if (paths.length === 0) return;
 
+      // Multiple paths dropped — check if first two are directories
+      if (paths.length >= 2) {
+        const isDir0 = await pathIsDir(paths[0]);
+        const isDir1 = await pathIsDir(paths[1]);
+        if (isDir0 && isDir1) {
+          setLeftFolderPath(paths[0]);
+          setRightFolderPath(paths[1]);
+          setRootPath(undefined);
+          setActivePath(undefined);
+          return;
+        }
+      }
+
       // Single directory → scan it
       if (paths.length === 1) {
         const isDir = await pathIsDir(paths[0]);
         if (isDir) {
           setRootPath(paths[0]);
+          setLeftFolderPath(undefined);
+          setRightFolderPath(undefined);
           return;
         }
         // Single file → open as right (preview)
@@ -141,6 +182,60 @@ function AppInner() {
           ud();
         },
       );
+    };
+  }, []);
+
+  // ── Drag-and-drop handling (Browser web mode) ────────────────────────
+  useEffect(() => {
+    if (isTauri) return;
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      setDropOverlay(true);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (e.relatedTarget === null) {
+        setDropOverlay(false);
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      setDropOverlay(false);
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length === 0) return;
+
+      if (files.length >= 2) {
+        const text0 = await files[0].text();
+        const text1 = await files[1].text();
+        setCustomFiles({
+          left: { name: files[0].name, contents: text0 },
+          right: { name: files[1].name, contents: text1 },
+        });
+        setLeftPath(files[0].name);
+        setRightPath(files[1].name);
+        setActivePath(undefined);
+      } else if (files.length === 1) {
+        const text0 = await files[0].text();
+        setCustomFiles({
+          left: { name: files[0].name, contents: '' },
+          right: { name: files[0].name, contents: text0 },
+        });
+        setLeftPath(undefined);
+        setRightPath(files[0].name);
+        setActivePath(undefined);
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
     };
   }, []);
 
@@ -239,58 +334,146 @@ function AppInner() {
     return <OfficeTestPage />;
   }
 
-  const { state: loadState, stats, nativeDiff, retry, diffProgress } = useFileDiffLoader(leftPath, rightPath);
+  const { state: loadState, stats, nativeDiff, retry, diffProgress } = useFileDiffLoader(leftPath, rightPath, customFiles);
 
   const fileDiff = useMemo(
     () => (loadState.phase === 'loaded' ? loadState.fileDiff ?? null : null),
     [loadState],
   );
 
-  const treeEntries = useTreeLoader(rootPath);
+  const { entries: treeEntries, loading: treeLoading, error: treeError } = useTreeLoader(
+    rootPath,
+    leftFolderPath,
+    rightFolderPath,
+  );
 
   const basename = (p: string) => p.split('/').pop() ?? p;
 
   const handleTreeSelect = (path: string) => {
+    setCustomFiles(null);
     setActivePath(path);
-    setRightPath(path);
-    setLeftPath(undefined);
+    if (leftFolderPath && rightFolderPath) {
+      const entry = treeEntries.find((e) => e.path === path);
+      if (entry?.status === 'deleted') {
+        setLeftPath(`${leftFolderPath}/${path}`);
+        setRightPath(undefined);
+      } else if (entry?.status === 'added') {
+        setLeftPath(undefined);
+        setRightPath(`${rightFolderPath}/${path}`);
+      } else {
+        setLeftPath(`${leftFolderPath}/${path}`);
+        setRightPath(`${rightFolderPath}/${path}`);
+      }
+    } else if (rootPath) {
+      setRightPath(`${rootPath}/${path}`);
+      setLeftPath(undefined);
+    } else {
+      setRightPath(path);
+      setLeftPath(undefined);
+    }
   };
 
   const handleSetLeft = useCallback((path: string) => {
-    setLeftPath(path);
+    setCustomFiles(null);
+    if (leftFolderPath) {
+      setLeftPath(`${leftFolderPath}/${path}`);
+    } else if (rootPath) {
+      setLeftPath(`${rootPath}/${path}`);
+    } else {
+      setLeftPath(path);
+    }
     setActivePath(undefined);
-  }, []);
+  }, [leftFolderPath, rootPath]);
 
   const handleSetRight = useCallback((path: string) => {
-    setRightPath(path);
+    setCustomFiles(null);
+    if (rightFolderPath) {
+      setRightPath(`${rightFolderPath}/${path}`);
+    } else if (rootPath) {
+      setRightPath(`${rootPath}/${path}`);
+    } else {
+      setRightPath(path);
+    }
     setActivePath(undefined);
-  }, []);
+  }, [rightFolderPath, rootPath]);
 
   const handleOpenLeft = useCallback(async () => {
-    if (!isTauri) return;
-    const p = await openFileDialog();
-    if (p !== null) {
-      setLeftPath(p);
-      setActivePath(undefined);
+    if (isTauri) {
+      const p = await openFileDialog();
+      if (p !== null) {
+        setLeftPath(p);
+        setActivePath(undefined);
+      }
+    } else {
+      fileInputLeftRef.current?.click();
     }
   }, []);
 
   const handleOpenRight = useCallback(async () => {
+    if (isTauri) {
+      const p = await openFileDialog();
+      if (p !== null) {
+        setRightPath(p);
+        setActivePath(undefined);
+      }
+    } else {
+      fileInputRightRef.current?.click();
+    }
+  }, []);
+
+  const handleBrowserLeftUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const text = await file.text();
+      setCustomFiles((prev) => ({
+        left: { name: file.name, contents: text },
+        right: prev?.right ?? { name: file.name, contents: '' },
+      }));
+      setLeftPath(file.name);
+      setActivePath(undefined);
+    }
+  };
+
+  const handleBrowserRightUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const text = await file.text();
+      setCustomFiles((prev) => ({
+        left: prev?.left ?? { name: file.name, contents: '' },
+        right: { name: file.name, contents: text },
+      }));
+      setRightPath(file.name);
+      setActivePath(undefined);
+    }
+  };
+
+  const handleOpenLeftFolder = useCallback(async () => {
     if (!isTauri) return;
-    const p = await openFileDialog();
+    const p = await openFolderDialog();
     if (p !== null) {
-      setRightPath(p);
+      setLeftFolderPath(p);
+      setRootPath(undefined);
       setActivePath(undefined);
     }
   }, []);
 
-  const handleOpenFolder = useCallback(async () => {
+  const handleOpenRightFolder = useCallback(async () => {
     if (!isTauri) return;
     const p = await openFolderDialog();
     if (p !== null) {
-      setRootPath(p);
+      setRightFolderPath(p);
+      setRootPath(undefined);
       setActivePath(undefined);
     }
+  }, []);
+
+  const handleClearFolders = useCallback(() => {
+    setLeftFolderPath(undefined);
+    setRightFolderPath(undefined);
+    setRootPath(undefined);
+    setActivePath(undefined);
+    setLeftPath(undefined);
+    setRightPath(undefined);
   }, []);
 
   return (
@@ -309,42 +492,135 @@ function AppInner() {
           </div>
         </div>
       )}
+      <input
+        type="file"
+        ref={fileInputLeftRef}
+        onChange={handleBrowserLeftUpload}
+        style={{ display: 'none' }}
+      />
+      <input
+        type="file"
+        ref={fileInputRightRef}
+        onChange={handleBrowserRightUpload}
+        style={{ display: 'none' }}
+      />
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
           <SplitSquareHorizontal size={20} />
           <span>Diff Tool</span>
+          <span className="demo-version-badge">v0.1.0</span>
         </div>
         <nav className="mode-list" aria-label="Comparison modes">
-          <button className="active"><GitBranch size={16} /> Changes</button>
-          <button><Layers3 size={16} /> Folders</button>
-          <button><Image size={16} /> Images</button>
-          <button><TerminalSquare size={16} /> CLI</button>
+          <button
+            className={viewMode === 'changes' ? 'active' : ''}
+            onClick={() => setViewMode('changes')}
+            type="button"
+          >
+            <GitBranch size={16} /> Changes
+          </button>
+          <button
+            className={viewMode === 'playground' ? 'active' : ''}
+            onClick={() => setViewMode('playground')}
+            type="button"
+          >
+            <Sparkles size={16} /> Playground
+          </button>
+          <button
+            className={viewMode === 'cli' ? 'active' : ''}
+            onClick={() => setViewMode('cli')}
+            type="button"
+          >
+            <TerminalSquare size={16} /> CLI & Stats
+          </button>
+          <button
+            className={viewMode === 'gallery' ? 'active' : ''}
+            onClick={() => setViewMode('gallery')}
+            type="button"
+          >
+            <Layers3 size={16} /> Gallery
+          </button>
         </nav>
         {isTauri && (
-          <button className="tree-open-folder-btn" onClick={handleOpenFolder} title="Open folder to scan">
-            <FolderOpen size={15} />
-            <span className="tree-open-folder-label">
-              {rootPath
-                ? rootPath.split('/').pop() ?? rootPath
-                : 'Open folder...'}
-            </span>
-          </button>
+          <div className="tree-folders-container">
+            <div className="tree-folders-header">
+              <span className="tree-folders-title">Compare Folders</span>
+              {(leftFolderPath || rightFolderPath || rootPath) && (
+                <button
+                  className="tree-folders-clear-btn"
+                  onClick={handleClearFolders}
+                  title="Clear folder comparison"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="tree-folders-buttons">
+              <button
+                className="tree-open-folder-btn"
+                onClick={handleOpenLeftFolder}
+                title="Choose left folder"
+              >
+                <FolderOpen size={13} />
+                <span className="tree-open-folder-label">
+                  {leftFolderPath ? `Left: ${basename(leftFolderPath)}` : 'Left folder…'}
+                </span>
+              </button>
+              <button
+                className="tree-open-folder-btn"
+                onClick={handleOpenRightFolder}
+                title="Choose right folder"
+              >
+                <FolderOpen size={13} />
+                <span className="tree-open-folder-label">
+                  {rightFolderPath ? `Right: ${basename(rightFolderPath)}` : 'Right folder…'}
+                </span>
+              </button>
+            </div>
+          </div>
         )}
-        <FileTreePane
-          entries={treeEntries}
-          activePath={activePath}
-          leftPath={leftPath}
-          rightPath={rightPath}
-          onSelect={handleTreeSelect}
-          onSetLeft={handleSetLeft}
-          onSetRight={handleSetRight}
-        />
+        {treeLoading ? (
+          <div className="tree-status-box tree-status-loading">
+            <span className="tree-spinner" />
+            <span>Comparing folders…</span>
+          </div>
+        ) : treeError ? (
+          <div className="tree-status-box tree-status-error">
+            <span className="tree-status-title">Scan failed</span>
+            <span className="tree-status-desc">{treeError}</span>
+          </div>
+        ) : treeEntries.length === 0 && (leftFolderPath && rightFolderPath) ? (
+          <div className="tree-status-box tree-status-empty">
+            <span>Folders are identical (no differences found).</span>
+          </div>
+        ) : treeEntries.length === 0 && rootPath ? (
+          <div className="tree-status-box tree-status-empty">
+            <span>Folder is empty.</span>
+          </div>
+        ) : (
+          <FileTreePane
+            entries={treeEntries}
+            activePath={activePath}
+            leftPath={leftPath}
+            rightPath={rightPath}
+            onSelect={handleTreeSelect}
+            onSetLeft={handleSetLeft}
+            onSetRight={handleSetRight}
+          />
+        )}
       </aside>
       <section className="workspace" aria-label="Diff workspace">
         <header className="toolbar">
           <div>
-            <h1>Working Tree</h1>
+            <h1>
+              {leftFolderPath && rightFolderPath
+                ? `Folder Diff: ${basename(leftFolderPath)} ↔ ${basename(rightFolderPath)}`
+                : activePath
+                ? basename(activePath)
+                : leftPath && rightPath
+                ? `${basename(leftPath)} ↔ ${basename(rightPath)}`
+                : 'Working Tree'}
+            </h1>
             <div className="toolbar-file-picker">
               <button className="toolbar-open-btn" onClick={handleOpenLeft} title="Open left file (original)">
                 <FileMinus2 size={14} />
@@ -359,10 +635,17 @@ function AppInner() {
                 </span>
               </button>
               {!isTauri && (
-                <a href="/?demo=gallery" className="toolbar-open-btn" title="Explore live diff examples">
-                  <Play size={14} />
-                  <span className="toolbar-open-label">Live examples</span>
-                </a>
+                <button
+                  type="button"
+                  onClick={() => setViewMode((m) => (m === 'playground' ? 'changes' : 'playground'))}
+                  className="toolbar-open-btn toolbar-playground-btn"
+                  title="Try custom diff with live code editors"
+                >
+                  <Sparkles size={14} />
+                  <span className="toolbar-open-label">
+                    {viewMode === 'playground' ? 'File tree' : 'Try custom diff'}
+                  </span>
+                </button>
               )}
             </div>
             <div className="toolbar-stats">
@@ -388,11 +671,29 @@ function AppInner() {
               Split
             </button>
             <SettingsPanel />
+            <a
+              href="https://github.com/chid/diff-tool"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="toolbar-github-link"
+              title="View on GitHub"
+            >
+              <svg height="15" width="15" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              <span>GitHub</span>
+            </a>
           </div>
         </header>
-        {loadState.phase === 'idle' ? (
+        {viewMode === 'playground' ? (
+          <Playground />
+        ) : viewMode === 'cli' ? (
+          <CliSimulator />
+        ) : viewMode === 'gallery' ? (
+          <DemoGallery onBack={() => setViewMode('changes')} />
+        ) : loadState.phase === 'idle' ? (
           <article className="diff-pane" aria-label="Welcome">
-            <WelcomeHero onExplore={() => window.location.href = '/?demo=gallery'} />
+            <WelcomeHero onExplore={() => setViewMode('playground')} />
           </article>
         ) : (
           <DiffPane

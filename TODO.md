@@ -31,9 +31,9 @@ large new product surfaces.
 
 ## P2: Folder And Git Backend
 
-- [ ] Implement true left/right folder comparison instead of single-root scan.
-- [ ] Add added/deleted/modified/unchanged status classification.
-- [ ] Respect `.gitignore`, `.ignore`, and explicit include/exclude filters.
+- [x] Implement true left/right folder comparison instead of single-root scan (`git_adapter::compare_folders`, chunked binary comparison).
+- [x] Add added/deleted/modified/unchanged status classification (`FolderDiff`, `DirEntryDiff`).
+- [x] Respect `.gitignore`, `.ignore`, and explicit include/exclude filters (`ignore::WalkBuilder` with `.require_git(false)`).
 - [ ] Add rename detection behind an explicit option.
 - [ ] Add Git repository discovery and working-tree status.
 - [ ] Add commit/branch comparison API.
@@ -50,7 +50,8 @@ large new product surfaces.
 - [x] Phase 1: Add `read_file_text` Tauri command, wire diff content with loading/error states.
 - [x] Phase 2: Wire `scan_tree` for live file tree entries.
 - [x] Phase 3: File open dialogs (`openFolderDialog`), drag and drop (`tauri://drag-drop`), command-line args (`getLaunchArgs`).
-- [ ] Phase 4: Decision on Rust-format vs. pierre-format diff output.
+- [x] Phase 4: Decision on Rust-format vs. pierre-format diff output (Rust DiffResult standardized).
+- [x] Phase 5: Two-folder comparison integration across desktop UI, Tauri IPC (`compare_folders`), and CLI (`dt dir <left> <right>`).
 - [x] TODO: Make Rust `DiffResult` the MVP desktop rendering contract for Tauri two-file comparisons and single-file previews.
   The plain Vite demo still uses `@pierre/diffs` sample data for browser-only examples; the desktop path no longer falls back to hardcoded README/TODO defaults.
 
@@ -64,6 +65,9 @@ large new product surfaces.
 
 ## P5: Product USPs
 
+- [ ] Add a local MCP server interface for agent-facing file and folder diff
+      tools. Start with stdio transport and the scoped MVP in
+      [docs/mcp-interface-plan.md](docs/mcp-interface-plan.md).
 - [x] Research and implement tree-sitter syntax-aware AST diffing.
       — Phases 0-5 complete (deps, parser, matching, hunk production, CLI flags,
         fixtures, perf benchmarks).

@@ -783,6 +783,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "diff-core",
+ "diff-tui",
  "git-adapter",
  "insta",
  "office-adapter",
@@ -824,6 +825,13 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+]
+
+[[package]]
+name = "diff-tui"
+version = "0.1.0"
+dependencies = [
+ "diff-core",
 ]
 
 [[package]]

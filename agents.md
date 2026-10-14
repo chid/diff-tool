@@ -111,6 +111,22 @@ In order:
 4. **Packaging prep** — Bundle config, icons, macOS preview build.
 5. **SemanticTag on Hunk** — Add `ChangeClass` to Hunk for per-hunk badges in desktop UI.
 
+## MCP Interface Planning
+
+An MCP interface is feasible as a separate local stdio Rust server that reuses
+the existing deterministic backend crates. The detailed plan is in
+`docs/mcp-interface-plan.md`.
+
+Recommended MVP:
+
+- Add `crates/diff-mcp` as a new binary crate.
+- Use the official Rust MCP SDK (`rmcp`) with stdio transport first.
+- Expose `diff_files`, `scan_tree`, `compare_folders`, and `diff_folder_file`.
+- Default allowed filesystem access to the server cwd, with explicit
+  `--allow-root` flags for broader roots.
+- Defer prompts, schemas, Office, Git, merge, and remote HTTP transport until
+  the local tool surface is verified.
+
 ## Known Performance Baseline
 
 Perf harness is green. Quick mode baseline (latest run):
@@ -154,6 +170,7 @@ INSTA_UPDATE=no cargo test --workspace       # All tests with snapshot checks
 | Agent D | Git and filesystem developer | `crates/git-adapter` | Left/right folder diff, ignore rules, Git status, conflict discovery. | Single-root scan only. |
 | Agent E | CLI and integration engineer | `crates/diff-cli` | `dt diff`, `dt dir`, `dt merge`, `dt git install`, exit codes, JSON/human output. | Core commands solid. merge/git stub properly. |
 | Agent F | QA, fixtures, and benchmarks | `fixtures/`, `examples/`, `scripts/`, `benches/` | Fixtures, perf budgets, Playwright/UI smoke tests, large-repo benchmark path. | Perf harness fixed. |
+| Agent G | MCP integration developer | `crates/diff-mcp`, `docs/mcp-interface-plan.md` | Local stdio MCP server, tool contracts, path sandboxing, protocol smoke tests. | Planned. |
 
 ## Acceptance Pattern For Future Tasks
 

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { DiffResult, DirEntryDiff, OfficeDiffResult, AiCompareRequest, AiCompareResponse } from './types';
+import type { DiffResult, DirEntryDiff, FolderDiff, OfficeDiffResult, AiCompareRequest, AiCompareResponse } from './types';
 
 export interface CompareFilesOptions {
   algorithm?: 'myers' | 'histogram' | 'patience';
@@ -23,6 +23,13 @@ export async function compareFiles(
       progress: options?.progress ?? false,
     },
   });
+}
+
+export async function compareFolders(
+  left: string,
+  right: string,
+): Promise<FolderDiff> {
+  return invoke<FolderDiff>('compare_folders', { left, right });
 }
 
 export async function scanTree(root: string): Promise<DirEntryDiff[]> {

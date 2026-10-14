@@ -1,64 +1,37 @@
-  # PLAN.md: MVP Desktop Ship Plan
+# Plan for Shippable Product
 
-  ## Summary
+To reach a shippable state, the tool needs to move beyond single-file diffing to folder-level comparison.
 
-  Ship target: MVP Desktop. The first release should be a credible local desktop/CLI preview for text file comparison and single-root
-  folder scanning, with clear limits. Office comparison is parked as experimental and must not block the first ship target or appear in
-  release claims.
+## Goal
+A functional desktop app that can:
+1.  Select two folders to compare.
+2.  Display a side-by-side file tree.
+3.  Perform diffs on selected files from the tree.
 
-  Current review findings from this checkout:
+## Implementation Roadmap
 
-  - npm run check passes.
-  - CARGO_HOME=/tmp/cargo-home cargo test -p office-adapter passes, but with many warnings.
-  - INSTA_UPDATE=no CARGO_HOME=/tmp/cargo-home cargo test --workspace fails because diff-core reads Office fixture case.json files as
-    text-diff fixtures.
-  - npm run perf:quick runs, but the perf harness treats dt diff exit code 1 as failure even though 1 now correctly means “differences
-    found.”
+### 1. Folder Comparison Backend (`crates/git-adapter`)
+- [x] Implement `compare_folders(left: &Path, right: &Path) -> Result<FolderDiff, AdapterError>` in `crates/git-adapter/src/lib.rs`.
+    - Scans both trees, matches files by relative path, classifies as Added/Deleted/Modified/Unchanged with chunked binary equality checking.
+- [x] Add unit & integration tests for folder comparison logic (e.g., identical folders, added/deleted files, gitignore filtering, error cases in `tests/compare_folders.rs`).
 
-  ## Key Changes
+### 2. Tauri IPC Wiring
+- [x] Expose `compare_folders` in `apps/desktop/src-tauri/src/main.rs`.
+- [x] Expose `compareFolders` in `apps/desktop/src/tauri.ts` and `FolderDiff` in `apps/desktop/src/types.ts`.
+- [x] Add Rust unit tests verifying Tauri IPC command behavior (`compare_folders_command_success`, `compare_folders_command_invalid_path_fails`).
 
-  - Add root PLAN.md with this MVP plan, then keep TODO.md as the tactical backlog and update stale checked-off items.
-  - Stabilize the test layout: either move Office fixtures out of fixtures/cases or teach text fixture discovery to only load text-diff
-    schemas.
-  - Fix the perf harness to treat dt diff exit codes 0 and 1 as successful executions, parse JSON for both, and reserve failure for
-    errors/timeouts.
-  - [x] Make Rust DiffResult the MVP desktop rendering contract. Use the native renderer for shipped text diffs; keep @pierre/diffs only as
-    fallback/spike code until a renderer ADR decides otherwise.
-  - [x] Finish the desktop open flow: no hardcoded README.md/TODO.md defaults in Tauri mode; support left/right file dialogs, folder picker
-    for scan, loading/error/empty states, and binary-file errors from Rust.
-  - Keep MVP folder support scoped to single-root scan, not true left/right folder compare. Label UI and docs accordingly.
-  - Clean CLI release behavior: keep documented dt diff exit codes; make nonexistent dt dir roots error instead of silently returning
-    success; remove, hide, or make unimplemented merge and git install return a non-success “not implemented” error.
-  - Park Office work: keep office-adapter green if it remains in the workspace, clean warning noise, and document it as experimental
-    with no desktop/CLI public surface for MVP.
-  - Prepare packaging: commit intentional Tauri capabilities/icons, set bundle config intentionally, produce a macOS local preview
-    build, and only claim Windows/Linux after smoke validation.
+### 3. Desktop UI Integration
+- [x] Update `App.tsx` to handle folder selection for *both* left and right sides (via dual folder picker buttons, drag-and-drop, and CLI launch arguments).
+- [x] Update `App.tsx` and `useTreeLoader` to call `compareFolders` and update the tree view with loading, error, and empty states.
+- [x] Wire up file selection in the tree to trigger `compareFiles` for the selected pair into `DiffPane.tsx`.
 
-  ## Test Plan
+### 4. CLI Support (`crates/diff-cli`)
+- [x] Implement `dt dir <left> <right>` positional two-folder diffing.
+- [x] Output status badges `[A]`, `[M]`, `[D]`, `[ ]` for human readability, and full JSON array when `--json` flag is provided.
+- [x] Conforms to exit codes: `0` for identical, `1` for differences, `2` for errors.
 
-  Required green checks before release:
+### 5. Verification
+- [x] Comprehensive test suites passing across all crates and frontend (`check.sh`, `npm test`, `perf:quick`, `cargo test -p git-adapter`, `cargo test -p diff-cli`, `vitest`).
 
-  - npm run test:mvp
-  - npm run check
-  - INSTA_UPDATE=no CARGO_HOME=/tmp/cargo-home cargo test --workspace
-  - npm run build
-  - npm run test:e2e:mvp-boundary
-  - npm run test:e2e:cli
-  - npm run test:e2e after making Playwright headless-by-default and ensuring tests write only under target/e2e
-  - npm run perf:quick after the exit-code fix
-  - npm run test:mvp:package for the desktop artifact
-
-  Coverage to add or fix:
-
-  - Text fixture discovery ignores Office schemas.
-  - CLI tests cover missing dt dir root and unimplemented command behavior.
-  - Desktop tests cover file-open compare, Rust-backed renderer output, binary/unreadable input errors, and settings persistence.
-  - E2E CLI-backed render test should not create transient files under apps/desktop/public; use Playwright routing or target/e2e
-    instead.
-
-  ## Assumptions
-
-  - MVP release means a local developer/early-user preview, not a signed/notarized public commercial release.
-  - Office, merge resolution, true left/right folder comparison, Git status, image diff, and AI features are post-MVP.
-  - Generated artifacts such as target/, test-results/, handoff files, and .bak files should not be committed.
-  - Windows work should use the existing SSH helper scripts rather than complex inline PowerShell.
+---
+This plan addresses the P2 TODOs while focusing on the core functional path of a diff tool.

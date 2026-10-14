@@ -1,6 +1,10 @@
 # Diff Tool
 
-Cross-platform, local-first diff and merge tool prototype.
+[![Live Demo](https://img.shields.io/badge/demo-live%20site-brightgreen)](https://chid.github.io/diff-tool/)
+
+Cross-platform, local-first diff and merge tool prototype powered by a high-performance Rust core and Pierre UI.
+
+👉 **[Try the Live Web Demo](https://chid.github.io/diff-tool/)** (Interactive live diff playground, syntax-aware tree-sitter diffing, and CLI simulator).
 
 The current repository is a working scaffold, not a finished product. It has a
 Rust backend, a Tauri/React desktop shell, fixture-driven tests, example inputs,
@@ -21,6 +25,7 @@ and a synthetic performance harness.
 ```text
 apps/desktop/        Tauri 2 + React desktop shell
 crates/diff-core/    Text diff models and comparison logic
+crates/diff-tui/     Terminal diff preview renderer and TUI scaffold
 crates/git-adapter/  Filesystem and future Git/folder integration
 crates/diff-cli/     `dt` command-line entrypoint
 docs/                Architecture, implementation, and process docs
@@ -51,6 +56,7 @@ npm run build
 npm run test
 npm run perf:quick
 cargo run -p diff-cli -- diff examples/text-basic/left.txt examples/text-basic/right.txt --json
+cargo run -p diff-cli -- tui examples/text-basic/left.txt examples/text-basic/right.txt
 ```
 
 Use `./scripts/check.sh` before handing work to another agent or opening a PR.
@@ -62,6 +68,7 @@ Implemented:
 
 - Workspace scaffold with Rust crates and desktop app.
 - Initial diff JSON model and `dt diff` CLI.
+- Deterministic `dt tui` split-pane scaffold for terminal diff UI work.
 - Basic folder scan model and `dt dir` CLI.
 - Tauri command bridge for file compare and tree scan.
 - **`@pierre/diffs` integration** — `FileDiff` renders in split view with
@@ -96,6 +103,7 @@ See [TODO.md](TODO.md) for the prioritized backlog.
 - [Testing and Performance](docs/testing-and-performance.md)
 - [End-To-End Integration Test Process](docs/e2e-integration-test-process.md)
 - [Implementation Plan](docs/implementation-plan.md)
+- [MCP Interface Plan](docs/mcp-interface-plan.md)
 - [Agent Work Packages](docs/agent-work-packages.md)
 - [Contributing](CONTRIBUTING.md)
 

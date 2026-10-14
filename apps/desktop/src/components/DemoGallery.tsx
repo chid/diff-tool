@@ -191,7 +191,14 @@ const EXAMPLES: DemoExample[] = [
 
 // ── Component ──────────────────────────────────────────────────────────
 
-export function DemoGallery() {
+import { useSettings } from './SettingsContext';
+
+interface DemoGalleryProps {
+  onBack?: () => void;
+}
+
+export function DemoGallery({ onBack }: DemoGalleryProps = {}) {
+  const { settings, updateSetting } = useSettings();
   const [activeId, setActiveId] = useState<string>(EXAMPLES[0].id);
   const active = EXAMPLES.find((e) => e.id === activeId)!;
 
@@ -253,10 +260,33 @@ export function DemoGallery() {
               <span key={tag} className="demo-tag">{tag}</span>
             ))}
           </div>
-          <div className="demo-header-stats">
-            <span className="demo-stat-add">+{active.diff.stats.additions}</span>
-            <span className="demo-stat-del">{'\u2212'}{active.diff.stats.deletions}</span>
-            <span className="demo-stat-unchanged">{active.diff.stats.unchanged} unchanged</span>
+          <div className="demo-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="toolbar-actions">
+              <button
+                className={settings.diffStyle === 'unified' ? 'active' : ''}
+                onClick={() => updateSetting('diffStyle', 'unified')}
+                type="button"
+              >
+                Unified
+              </button>
+              <button
+                className={settings.diffStyle === 'split' ? 'active' : ''}
+                onClick={() => updateSetting('diffStyle', 'split')}
+                type="button"
+              >
+                Split
+              </button>
+            </div>
+            {onBack && (
+              <button
+                className="toolbar-open-btn"
+                onClick={onBack}
+                type="button"
+                style={{ marginLeft: '8px' }}
+              >
+                Back to workspace
+              </button>
+            )}
           </div>
         </header>
 

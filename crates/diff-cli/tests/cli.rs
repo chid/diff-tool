@@ -40,10 +40,38 @@ fn diff_json_is_parseable() {
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(1), "diff with differences exits 1");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "diff with differences exits 1"
+    );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["stats"]["additions"], 1);
     assert_eq!(json["stats"]["deletions"], 1);
+}
+
+#[test]
+fn tui_prints_split_pane_scaffold() {
+    let dir = tempdir().unwrap();
+    let left = dir.path().join("left.txt");
+    let right = dir.path().join("right.txt");
+    fs::write(&left, "one\ntwo\n").unwrap();
+    fs::write(&right, "one\nthree\n").unwrap();
+
+    let mut cmd = Command::cargo_bin("dt").unwrap();
+    cmd.arg("tui")
+        .arg(&left)
+        .arg(&right)
+        .arg("--width")
+        .arg("90")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("Diff Tool TUI scaffold"))
+        .stdout(predicate::str::contains("Original"))
+        .stdout(predicate::str::contains("Modified"))
+        .stdout(predicate::str::contains("keys: n/p hunk  / search"))
+        .stdout(predicate::str::contains("two"))
+        .stdout(predicate::str::contains("three"));
 }
 
 #[test]
@@ -91,7 +119,11 @@ fn snapshot_diff_human_basic_replacement() {
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(1), "diff with differences exits 1");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "diff with differences exits 1"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     insta::assert_snapshot!("diff_human_basic_replacement", stdout);
 }
@@ -110,7 +142,11 @@ fn snapshot_diff_json_basic_replacement() {
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(1), "diff with differences exits 1");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "diff with differences exits 1"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     insta::assert_snapshot!("diff_json_basic_replacement", stdout);
 }
@@ -121,11 +157,7 @@ fn snapshot_dir_human_folder_basic_left() {
         .join("../..")
         .join("examples/folder-basic/left");
 
-    let output = cmd()
-        .args(["dir"])
-        .arg(&dir)
-        .output()
-        .unwrap();
+    let output = cmd().args(["dir"]).arg(&dir).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -165,7 +197,11 @@ fn snapshot_diff_json_multi_hunk() {
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(1), "diff with differences exits 1");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "diff with differences exits 1"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     insta::assert_snapshot!("diff_json_multi_hunk", stdout);
 }
@@ -187,13 +223,14 @@ fn snapshot_diff_json_with_warnings() {
         .output()
         .unwrap();
 
-    assert_eq!(output.status.code(), Some(1), "diff with differences exits 1");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "diff with differences exits 1"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     // The temp path is non-deterministic; redact it before snapshotting.
-    let redacted = stdout.replace(
-        dir.path().to_str().unwrap(),
-        "<TMPDIR>",
-    );
+    let redacted = stdout.replace(dir.path().to_str().unwrap(), "<TMPDIR>");
     insta::assert_snapshot!("diff_json_with_warnings", redacted);
 }
 
@@ -207,12 +244,7 @@ fn exit_0_when_identical() {
     fs::write(&left, "same\ncontent\n").unwrap();
     fs::write(&right, "same\ncontent\n").unwrap();
 
-    cmd()
-        .args(["diff"])
-        .arg(&left)
-        .arg(&right)
-        .assert()
-        .code(0);
+    cmd().args(["diff"]).arg(&left).arg(&right).assert().code(0);
 }
 
 #[test]
@@ -223,12 +255,7 @@ fn exit_1_when_different() {
     fs::write(&left, "old\n").unwrap();
     fs::write(&right, "new\n").unwrap();
 
-    cmd()
-        .args(["diff"])
-        .arg(&left)
-        .arg(&right)
-        .assert()
-        .code(1);
+    cmd().args(["diff"]).arg(&left).arg(&right).assert().code(1);
 }
 
 #[test]
@@ -270,11 +297,7 @@ fn dir_exit_0_on_success() {
     let dir = tempdir().unwrap();
     fs::write(dir.path().join("f.txt"), "hi\n").unwrap();
 
-    cmd()
-        .args(["dir"])
-        .arg(dir.path())
-        .assert()
-        .code(0);
+    cmd().args(["dir"]).arg(dir.path()).assert().code(0);
 }
 
 #[test]
@@ -360,4 +383,88 @@ fn exit_0_when_identical_json() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["stats"]["additions"], 0);
     assert_eq!(json["stats"]["deletions"], 0);
+}
+
+#[test]
+fn dir_two_folders_exit_0_when_identical() {
+    let left_dir = tempdir().unwrap();
+    let right_dir = tempdir().unwrap();
+
+    fs::write(left_dir.path().join("file.txt"), "same\n").unwrap();
+    fs::write(right_dir.path().join("file.txt"), "same\n").unwrap();
+
+    let output = cmd()
+        .args(["dir"])
+        .arg(left_dir.path())
+        .arg(right_dir.path())
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[ ]  file.txt"));
+}
+
+#[test]
+fn dir_two_folders_exit_1_when_different() {
+    let left_dir = tempdir().unwrap();
+    let right_dir = tempdir().unwrap();
+
+    fs::write(left_dir.path().join("modified.txt"), "old\n").unwrap();
+    fs::write(right_dir.path().join("modified.txt"), "new\n").unwrap();
+
+    fs::write(left_dir.path().join("deleted.txt"), "gone\n").unwrap();
+    fs::write(right_dir.path().join("added.txt"), "fresh\n").unwrap();
+
+    let output = cmd()
+        .args(["dir"])
+        .arg(left_dir.path())
+        .arg(right_dir.path())
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[M]  modified.txt"));
+    assert!(stdout.contains("[D]  deleted.txt"));
+    assert!(stdout.contains("[A]  added.txt"));
+}
+
+#[test]
+fn dir_two_folders_json_output() {
+    let left_dir = tempdir().unwrap();
+    let right_dir = tempdir().unwrap();
+
+    fs::write(left_dir.path().join("a.txt"), "hello\n").unwrap();
+    fs::write(right_dir.path().join("a.txt"), "world\n").unwrap();
+
+    let output = cmd()
+        .args(["dir"])
+        .arg(left_dir.path())
+        .arg(right_dir.path())
+        .arg("--json")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(json.is_array());
+    let entries = json.as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["path"], "a.txt");
+    assert_eq!(entries[0]["status"], "modified");
+}
+
+#[test]
+fn dir_two_folders_exit_2_when_missing() {
+    let left_dir = tempdir().unwrap();
+    let missing = left_dir.path().join("nonexistent_folder");
+
+    cmd()
+        .args(["dir"])
+        .arg(left_dir.path())
+        .arg(&missing)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("error:"));
 }

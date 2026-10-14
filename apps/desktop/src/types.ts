@@ -122,6 +122,10 @@ export interface DirEntryDiff {
   children: DirEntryDiff[];
 }
 
+export interface FolderDiff {
+  entries: DirEntryDiff[];
+}
+
 // ── AI compare types ───────────────────────────────────────────────
 
 export type AiProvider = 'openai' | 'anthropic' | 'custom';

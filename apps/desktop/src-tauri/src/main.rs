@@ -170,6 +170,11 @@ fn scan_tree(root: PathBuf) -> Result<Vec<git_adapter::DirEntryDiff>, String> {
 }
 
 #[tauri::command]
+fn compare_folders(left: PathBuf, right: PathBuf) -> Result<git_adapter::FolderDiff, String> {
+    git_adapter::compare_folders(&left, &right).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn compare_office<R: tauri::Runtime>(
     _app_handle: tauri::AppHandle<R>,
     request: CompareOfficeRequest,
@@ -276,6 +281,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             compare_files,
+            compare_folders,
             compare_office,
             compare_ai,
             scan_tree,
@@ -295,8 +301,10 @@ mod tests {
 
     fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
         let dir = std::env::temp_dir().join("diff-tool-test");
-        std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
         let mut f = std::fs::File::create(&path).unwrap();
         f.write_all(contents).unwrap();
         path
@@ -647,5 +655,26 @@ mod tests {
         let args = get_launch_args();
         // The result is a Vec<String> — no further assertions needed.
         let _: Vec<String> = args;
+    }
+
+    #[test]
+    fn compare_folders_command_success() {
+        let left = temp_file("tauri_left/file.txt", b"hello world");
+        let right = temp_file("tauri_right/file.txt", b"hello world");
+        let left_dir = left.parent().unwrap().to_path_buf();
+        let right_dir = right.parent().unwrap().to_path_buf();
+
+        let result = compare_folders(left_dir, right_dir).unwrap();
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].status, git_adapter::EntryStatus::Unchanged);
+    }
+
+    #[test]
+    fn compare_folders_command_invalid_path_fails() {
+        let result = compare_folders(
+            PathBuf::from("/nonexistent/left_folder_xyz"),
+            PathBuf::from("/nonexistent/right_folder_xyz"),
+        );
+        assert!(result.is_err());
     }
 }

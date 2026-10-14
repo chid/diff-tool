@@ -81,6 +81,43 @@ enum Command {
         #[arg(long)]
         syntax_depth: Option<String>,
     },
+    /// Render a terminal UI scaffold for a two-file diff.
+    ///
+    /// This first slice is deterministic and non-interactive so it can run in
+    /// CI and snapshots. It establishes the split-pane information architecture
+    /// before the interactive terminal backend lands.
+    Tui {
+        left: PathBuf,
+        right: PathBuf,
+        #[arg(long, conflicts_with = "ignore_whitespace_and_case")]
+        ignore_whitespace: bool,
+        #[arg(long, conflicts_with = "ignore_whitespace")]
+        ignore_whitespace_and_case: bool,
+        #[arg(long, default_value = "3")]
+        context: usize,
+        #[arg(long, value_enum)]
+        algorithm: Option<AlgorithmArg>,
+        /// Wall-clock deadline in milliseconds.
+        #[arg(long)]
+        deadline: Option<u64>,
+        /// Override language for syntax-aware AST diffing.
+        /// Supported: rust, typescript, python.
+        #[arg(long)]
+        language: Option<String>,
+        /// AST node depth for syntax-aware diffing.
+        /// Levels: statement (default), function, token.
+        #[arg(long)]
+        syntax_depth: Option<String>,
+        /// Preview width in terminal columns.
+        #[arg(long, default_value = "120")]
+        width: usize,
+        /// Maximum hunks to render in the scaffold preview.
+        #[arg(long, default_value = "8")]
+        max_hunks: usize,
+        /// Maximum lines per hunk to render in the scaffold preview.
+        #[arg(long, default_value = "80")]
+        max_lines_per_hunk: usize,
+    },
     /// Scan a directory tree, or compare two directories.
     ///
     /// With only ROOT: lists all files in the tree (like `ls -R`).
@@ -88,9 +125,10 @@ enum Command {
     /// parallel, reporting additions, deletions, and modifications.
     Dir {
         root: PathBuf,
-        /// Right-hand directory for two-folder comparison.  File pairs with
-        /// matching relative paths are diffed in parallel using all available
-        /// CPU cores.
+        /// Optional right-hand directory for two-folder comparison: `dt dir <left> <right>`.
+        #[arg(value_name = "RIGHT")]
+        right_pos: Option<PathBuf>,
+        /// Right-hand directory for two-folder comparison (`--right <path>`).
         #[arg(long)]
         right: Option<PathBuf>,
         #[arg(long)]
@@ -226,12 +264,25 @@ fn main() {
 
 fn run(args: Args) -> i32 {
     match args.command {
-        Command::Diff { left, right, json, ignore_whitespace, ignore_whitespace_and_case, context, algorithm, deadline, progress, language, syntax_depth } => {
+        Command::Diff {
+            left,
+            right,
+            json,
+            ignore_whitespace,
+            ignore_whitespace_and_case,
+            context,
+            algorithm,
+            deadline,
+            progress,
+            language,
+            syntax_depth,
+        } => {
             // Merge config defaults: CLI flags > config > hardcoded defaults.
             let cfg = config::load();
             let algorithm = algorithm
                 .or_else(|| {
-                    cfg.defaults.algorithm
+                    cfg.defaults
+                        .algorithm
                         .as_deref()
                         .and_then(config::parse_algorithm)
                 })
@@ -242,31 +293,28 @@ fn run(args: Args) -> i32 {
                 eprintln!("warning: experimental --algorithm syntax (see ROUGH_EDGES.md)");
             }
 
-            let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> =
-                if progress {
-                    Some(Box::new(|p| {
-                        match p {
-                            diff_core::Progress::Reading { path, bytes } => {
-                                let kb = bytes / 1024;
-                                eprintln!("  reading {} ({} KiB)", path.display(), kb);
-                            }
-                            diff_core::Progress::Normalizing => {
-                                eprintln!("  normalizing...");
-                            }
-                            diff_core::Progress::ComputingDiff => {
-                                eprintln!("  computing diff...");
-                            }
-                            diff_core::Progress::ComputingIntralineSpans => {
-                                eprintln!("  computing intraline spans...");
-                            }
-                            diff_core::Progress::BuildingHunks => {
-                                eprintln!("  building hunks...");
-                            }
-                        }
-                    }))
-                } else {
-                    None
-                };
+            let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> = if progress {
+                Some(Box::new(|p| match p {
+                    diff_core::Progress::Reading { path, bytes } => {
+                        let kb = bytes / 1024;
+                        eprintln!("  reading {} ({} KiB)", path.display(), kb);
+                    }
+                    diff_core::Progress::Normalizing => {
+                        eprintln!("  normalizing...");
+                    }
+                    diff_core::Progress::ComputingDiff => {
+                        eprintln!("  computing diff...");
+                    }
+                    diff_core::Progress::ComputingIntralineSpans => {
+                        eprintln!("  computing intraline spans...");
+                    }
+                    diff_core::Progress::BuildingHunks => {
+                        eprintln!("  building hunks...");
+                    }
+                }))
+            } else {
+                None
+            };
 
             let result = diff_core::compare_files_with_progress(
                 DiffRequest {
@@ -320,7 +368,17 @@ fn run(args: Args) -> i32 {
                 EXIT_DIFFERENCES
             }
         }
-        Command::Dir { root, right, json, algorithm, deadline, progress, language, syntax_depth } => {
+        Command::Dir {
+            root,
+            right_pos,
+            right,
+            json,
+            algorithm,
+            deadline,
+            progress,
+            language,
+            syntax_depth,
+        } => {
             if !root.exists() {
                 eprintln!("error: {} does not exist", root.display());
                 return EXIT_ERROR;
@@ -330,11 +388,17 @@ fn run(args: Args) -> i32 {
                 return EXIT_ERROR;
             }
 
+            // Positional two-folder comparison: `dt dir <left> <right>`
+            if let Some(right_root) = right_pos {
+                return run_compare_folders(root, right_root, json);
+            }
+
             // Merge config defaults for algorithm and deadline.
             let cfg = config::load();
             let algorithm = algorithm
                 .or_else(|| {
-                    cfg.defaults.algorithm
+                    cfg.defaults
+                        .algorithm
                         .as_deref()
                         .and_then(config::parse_algorithm)
                 })
@@ -346,7 +410,16 @@ fn run(args: Args) -> i32 {
             }
 
             if let Some(right_root) = right {
-                return run_dir_diff(root, right_root, json, algorithm, deadline, progress, language, syntax_depth);
+                return run_dir_diff(
+                    root,
+                    right_root,
+                    json,
+                    algorithm,
+                    deadline,
+                    progress,
+                    language,
+                    syntax_depth,
+                );
             }
 
             // Single-root listing (backward compatible).
@@ -370,6 +443,75 @@ fn run(args: Args) -> i32 {
             }
             EXIT_SUCCESS
         }
+        Command::Tui {
+            left,
+            right,
+            ignore_whitespace,
+            ignore_whitespace_and_case,
+            context,
+            algorithm,
+            deadline,
+            language,
+            syntax_depth,
+            width,
+            max_hunks,
+            max_lines_per_hunk,
+        } => {
+            let cfg = config::load();
+            let algorithm = algorithm
+                .or_else(|| {
+                    cfg.defaults
+                        .algorithm
+                        .as_deref()
+                        .and_then(config::parse_algorithm)
+                })
+                .unwrap_or(AlgorithmArg::Myers);
+            let deadline = deadline.or(cfg.defaults.deadline);
+
+            if algorithm == AlgorithmArg::Syntax {
+                eprintln!("warning: experimental --algorithm syntax (see ROUGH_EDGES.md)");
+            }
+
+            let result = diff_core::compare_files(DiffRequest {
+                left,
+                right,
+                mode: DiffMode::Split,
+                ignore: if ignore_whitespace_and_case {
+                    IgnoreMode::WhitespaceAndCase
+                } else if ignore_whitespace {
+                    IgnoreMode::Whitespace
+                } else {
+                    IgnoreMode::None
+                },
+                context,
+                max_bytes: Some(10 * 1024 * 1024),
+                algorithm: algorithm.into(),
+                deadline_ms: deadline,
+                language,
+                syntax_depth,
+            });
+            let result = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    eprint_error(&e);
+                    return EXIT_ERROR;
+                }
+            };
+            let output = diff_tui::render_preview(
+                &result,
+                diff_tui::TuiRenderOptions {
+                    width,
+                    max_hunks,
+                    max_lines_per_hunk,
+                },
+            );
+            print!("{output}");
+            if result.stats.additions == 0 && result.stats.deletions == 0 {
+                EXIT_SUCCESS
+            } else {
+                EXIT_DIFFERENCES
+            }
+        }
         Command::Merge {
             base: _,
             ours: _,
@@ -386,9 +528,15 @@ fn run(args: Args) -> i32 {
             EXIT_ERROR
         }
         Command::Office { command } => run_office(command),
-        Command::Ai { provider, api_key, model, base_url, file, json, command } => {
-            run_ai(provider, api_key, model, base_url, file, json, command)
-        }
+        Command::Ai {
+            provider,
+            api_key,
+            model,
+            base_url,
+            file,
+            json,
+            command,
+        } => run_ai(provider, api_key, model, base_url, file, json, command),
         Command::Config { command } => run_config(command),
     }
 }
@@ -464,27 +612,24 @@ fn run_ai(
 
     // 5. Build the ChatRequest using the prompts module.
     let chat_request = match &command {
-        AiCommand::GenerateSummary { language } => {
-            ai_adapter::prompts::build_summary_request(
-                adapter.config().model.as_str(),
-                &diff_text,
-                language,
-            )
-        }
-        AiCommand::GenerateCommitMsg => {
-            ai_adapter::prompts::build_commit_msg_request(
-                adapter.config().model.as_str(),
-                &diff_text,
-            )
-        }
-        AiCommand::AssessRisk { file_path, language } => {
-            ai_adapter::prompts::build_risk_request(
-                adapter.config().model.as_str(),
-                file_path,
-                &diff_text,
-                language,
-            )
-        }
+        AiCommand::GenerateSummary { language } => ai_adapter::prompts::build_summary_request(
+            adapter.config().model.as_str(),
+            &diff_text,
+            language,
+        ),
+        AiCommand::GenerateCommitMsg => ai_adapter::prompts::build_commit_msg_request(
+            adapter.config().model.as_str(),
+            &diff_text,
+        ),
+        AiCommand::AssessRisk {
+            file_path,
+            language,
+        } => ai_adapter::prompts::build_risk_request(
+            adapter.config().model.as_str(),
+            file_path,
+            &diff_text,
+            language,
+        ),
     };
 
     // 6. Call the LLM.
@@ -618,8 +763,6 @@ fn read_diff_text(file: Option<&PathBuf>) -> std::io::Result<String> {
     }
 }
 
-
-
 /// Handle `dt config` subcommands.
 fn run_config(cmd: ConfigCommand) -> i32 {
     match cmd {
@@ -656,7 +799,9 @@ fn run_config(cmd: ConfigCommand) -> i32 {
                     let ms: u64 = match value.parse() {
                         Ok(v) => v,
                         Err(e) => {
-                            eprintln!("error: deadline must be a positive integer (milliseconds): {e}");
+                            eprintln!(
+                                "error: deadline must be a positive integer (milliseconds): {e}"
+                            );
                             return EXIT_ERROR;
                         }
                     };
@@ -677,25 +822,28 @@ fn run_config(cmd: ConfigCommand) -> i32 {
             println!("Saved config to {}", config::config_path().display());
             EXIT_SUCCESS
         }
-        ConfigCommand::Reset => {
-            match config::delete_config_file() {
-                Ok(()) => {
-                    println!("Config reset (file deleted).");
-                    EXIT_SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("error: {e}");
-                    EXIT_ERROR
-                }
+        ConfigCommand::Reset => match config::delete_config_file() {
+            Ok(()) => {
+                println!("Config reset (file deleted).");
+                EXIT_SUCCESS
             }
-        }
+            Err(e) => {
+                eprintln!("error: {e}");
+                EXIT_ERROR
+            }
+        },
     }
 }
 
 /// Handle `dt office` subcommands.
 fn run_office(cmd: OfficeCommand) -> i32 {
     match cmd {
-        OfficeCommand::Diff { left, right, json, sheets } => {
+        OfficeCommand::Diff {
+            left,
+            right,
+            json,
+            sheets,
+        } => {
             let mut opts = office_adapter::OfficeDiffOptions::default();
             if !sheets.is_empty() {
                 opts.sheets = sheets;
@@ -862,6 +1010,53 @@ struct PairDiffResult {
     warnings: Option<Vec<String>>,
 }
 
+/// Positional two-folder comparison using `git_adapter::compare_folders`.
+/// Displays human-readable tree view with [A], [M], [D], [ ] statuses,
+/// supports --json output, and exits 0 for identical, 1 for differences, 2 for errors.
+fn run_compare_folders(left_root: PathBuf, right_root: PathBuf, json: bool) -> i32 {
+    let diff = match git_adapter::compare_folders(&left_root, &right_root) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return EXIT_ERROR;
+        }
+    };
+
+    let has_differences = diff.entries.iter().any(|e| {
+        matches!(
+            e.status,
+            EntryStatus::Added | EntryStatus::Deleted | EntryStatus::Modified
+        )
+    });
+
+    if json {
+        match serde_json::to_string_pretty(&diff.entries) {
+            Ok(j) => println!("{j}"),
+            Err(e) => {
+                eprintln!("error: failed to serialise JSON: {e}");
+                return EXIT_ERROR;
+            }
+        }
+    } else {
+        for entry in &diff.entries {
+            let tag = match entry.status {
+                EntryStatus::Added => "[A]",
+                EntryStatus::Modified => "[M]",
+                EntryStatus::Deleted => "[D]",
+                EntryStatus::Unchanged => "[ ]",
+                EntryStatus::Directory => continue,
+            };
+            println!("{tag}  {}", entry.path.display());
+        }
+    }
+
+    if has_differences {
+        EXIT_DIFFERENCES
+    } else {
+        EXIT_SUCCESS
+    }
+}
+
 /// Two-folder comparison: walk both trees, diff matching file pairs in parallel.
 fn run_dir_diff(
     left_root: PathBuf,
@@ -930,47 +1125,46 @@ fn run_dir_diff(
             match (left_exists, right_exists) {
                 (true, true) => {
                     // Both exist — diff them.
-                    let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> =
-                        if progress {
-                            let label = rel_path.to_string();
-                            Some(Box::new(move |p| {
-                                match p {
-                                    diff_core::Progress::Reading { path, bytes } => {
-                                        let kb = bytes / 1024;
-                                        eprintln!("  [{label}] reading {} ({} KiB)", path.display(), kb);
-                                    }
-                                    diff_core::Progress::Normalizing => {
-                                        eprintln!("  [{label}] normalizing...");
-                                    }
-                                    diff_core::Progress::ComputingDiff => {
-                                        eprintln!("  [{label}] computing diff...");
-                                    }
-                                    diff_core::Progress::ComputingIntralineSpans => {
-                                        eprintln!("  [{label}] computing intraline spans...");
-                                    }
-                                    diff_core::Progress::BuildingHunks => {
-                                        eprintln!("  [{label}] building hunks...");
-                                    }
-                                }
-                            }))
-                        } else {
-                            None
-                        };
-                    match diff_core::compare_files_with_progress(DiffRequest {
-                        left: left_path,
-                        right: right_path,
-                        mode: DiffMode::Split,
-                        ignore: IgnoreMode::None,
-                        context: 3,
-                        max_bytes: Some(10 * 1024 * 1024),
-                        algorithm: algorithm.into(),
-                        deadline_ms: deadline,
-                        language: language.clone(),
-                        syntax_depth: syntax_depth.clone(),
-                    }, progress_cb) {
+                    let progress_cb: Option<Box<dyn Fn(diff_core::Progress) + Send>> = if progress {
+                        let label = rel_path.to_string();
+                        Some(Box::new(move |p| match p {
+                            diff_core::Progress::Reading { path, bytes } => {
+                                let kb = bytes / 1024;
+                                eprintln!("  [{label}] reading {} ({} KiB)", path.display(), kb);
+                            }
+                            diff_core::Progress::Normalizing => {
+                                eprintln!("  [{label}] normalizing...");
+                            }
+                            diff_core::Progress::ComputingDiff => {
+                                eprintln!("  [{label}] computing diff...");
+                            }
+                            diff_core::Progress::ComputingIntralineSpans => {
+                                eprintln!("  [{label}] computing intraline spans...");
+                            }
+                            diff_core::Progress::BuildingHunks => {
+                                eprintln!("  [{label}] building hunks...");
+                            }
+                        }))
+                    } else {
+                        None
+                    };
+                    match diff_core::compare_files_with_progress(
+                        DiffRequest {
+                            left: left_path,
+                            right: right_path,
+                            mode: DiffMode::Split,
+                            ignore: IgnoreMode::None,
+                            context: 3,
+                            max_bytes: Some(10 * 1024 * 1024),
+                            algorithm: algorithm.into(),
+                            deadline_ms: deadline,
+                            language: language.clone(),
+                            syntax_depth: syntax_depth.clone(),
+                        },
+                        progress_cb,
+                    ) {
                         Ok(result) => {
-                            let changed =
-                                result.stats.additions > 0 || result.stats.deletions > 0;
+                            let changed = result.stats.additions > 0 || result.stats.deletions > 0;
                             PairDiffResult {
                                 path: rel_path.to_string(),
                                 status: if changed { "modified" } else { "unchanged" },
@@ -1006,9 +1200,7 @@ fn run_dir_diff(
                     path: rel_path.to_string(),
                     status: "error",
                     stats: None,
-                    warnings: Some(vec![
-                        "file vanished between scan and diff".into()
-                    ]),
+                    warnings: Some(vec!["file vanished between scan and diff".into()]),
                 },
             }
         })

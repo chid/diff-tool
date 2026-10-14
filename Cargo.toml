@@ -4,6 +4,7 @@ members = [
   "crates/diff-core",
   "crates/git-adapter",
   "crates/diff-cli",
+  "crates/diff-tui",
   "crates/office-adapter",
   "crates/ai-adapter",
   "apps/desktop/src-tauri"
@@ -17,6 +18,7 @@ version = "0.1.0"
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
 diff-core = { path = "crates/diff-core" }
+diff-tui = { path = "crates/diff-tui" }
 git-adapter = { path = "crates/git-adapter" }
 office-adapter = { path = "crates/office-adapter" }
 ai-adapter = { path = "crates/ai-adapter" }
