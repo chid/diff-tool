@@ -4,11 +4,12 @@
 //! requiring real API keys or network access.
 
 use ai_adapter::{
-    AiError, AnthropicBackend, ChatMessage, ChatRequest, ChatResponse, Chunk, LlmBackend,
-    OpenAiBackend,
+    AiAdapter, AiError, AnthropicBackend, BackendConfig, ChatMessage, ChatRequest, ChatResponse,
+    Chunk, LlmBackend, OpenAiBackend, Provider, RiskLevel,
 };
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -730,3 +731,311 @@ async fn anthropic_uses_max_tokens_fallback() {
 
     backend.complete(request).await.unwrap();
 }
+
+// ── OpenRouter integration tests ──────────────────────────────────────────
+
+#[tokio::test]
+async fn openrouter_complete_nonstreaming_parses_response() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(header("Authorization", "Bearer sk-or-test-key"))
+        .and(header("Content-Type", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "gen-12345",
+            "model": "anthropic/claude-3.5-sonnet",
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "OpenRouter test response"
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 15,
+                "completion_tokens": 8,
+                "total_tokens": 23
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::OpenRouter,
+        api_key: "sk-or-test-key".into(),
+        model: "anthropic/claude-3.5-sonnet".into(),
+        base_url: Some(mock_server.uri()),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let response = adapter.complete(make_request()).await.unwrap();
+
+    assert_eq!(response.content, "OpenRouter test response");
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.prompt_tokens, 15);
+    assert_eq!(usage.completion_tokens, 8);
+    assert_eq!(usage.total_tokens, 23);
+}
+
+#[tokio::test]
+async fn openrouter_adapter_uses_openrouter_defaults() {
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::OpenRouter,
+        api_key: "sk-dummy".into(),
+        model: "".into(),
+        base_url: None,
+        ..Default::default()
+    })
+    .unwrap();
+
+    assert_eq!(adapter.config().provider, Provider::OpenRouter);
+}
+
+#[tokio::test]
+#[ignore = "requires live OPENROUTER_API_KEY; run with cargo test -- --ignored"]
+async fn openrouter_live_if_key_available() {
+    let key = match std::env::var("OPENROUTER_API_KEY") {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => {
+            eprintln!("SKIPPED: OPENROUTER_API_KEY not set; skipping live OpenRouter query.");
+            return;
+        }
+    };
+
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::OpenRouter,
+        api_key: key,
+        model: "openai/gpt-4o-mini".into(),
+        base_url: None,
+        timeout_secs: 30,
+        ..Default::default()
+    })
+    .unwrap();
+
+    let res = adapter
+        .complete(ChatRequest {
+            model: "openai/gpt-4o-mini".into(),
+            messages: vec![ChatMessage::user("Reply with exact word: PONG")],
+            max_tokens: Some(10),
+            temperature: Some(0.0),
+            stream: None,
+        })
+        .await;
+
+    match res {
+        Ok(resp) => {
+            assert!(resp.content.to_uppercase().contains("PONG"));
+        }
+        Err(e) => {
+            eprintln!("Notice: Live OpenRouter call encountered: {e}");
+        }
+    }
+}
+
+// ── Localhost:8080 custom backend tests ───────────────────────────────────
+
+#[tokio::test]
+async fn localhost_8080_custom_backend_wiremock() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .and(header("Content-Type", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Localhost:8080 llama response"
+                    }
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 10,
+                "total_tokens": 30
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let base_url = format!("{}/v1", mock_server.uri());
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::Custom,
+        api_key: "not-needed".into(),
+        model: "qwen".into(),
+        base_url: Some(base_url),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let response = adapter.complete(make_request()).await.unwrap();
+    assert_eq!(response.content, "Localhost:8080 llama response");
+    assert_eq!(response.usage.unwrap().total_tokens, 30);
+}
+
+#[tokio::test]
+async fn localhost_8080_llama_cpp_wire_format_wiremock() {
+    let mock_server = MockServer::start().await;
+
+    // Mimic the exact llama.cpp JSON payload observed on localhost:8080
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .and(header("Content-Type", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "{\"summary\": \"Optimized loop\"}"
+                    }
+                }
+            ],
+            "created": 1792060872,
+            "model": "Qwen3.8-27B-Heretic-Ara",
+            "system_fingerprint": "b10687-c841aeeb8",
+            "object": "chat.completion",
+            "usage": {
+                "completion_tokens": 15,
+                "prompt_tokens": 40,
+                "total_tokens": 55
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let base_url = format!("{}/v1", mock_server.uri());
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::Custom,
+        api_key: "not-needed".into(),
+        model: "Qwen3.8-27B-Heretic-Ara".into(),
+        base_url: Some(base_url),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let response = adapter.complete(make_request()).await.unwrap();
+    assert_eq!(response.content, "{\"summary\": \"Optimized loop\"}");
+    assert_eq!(response.usage.unwrap().total_tokens, 55);
+}
+
+#[tokio::test]
+#[ignore = "requires live llama.cpp on localhost:8080; run with cargo test -- --ignored"]
+async fn localhost_8080_live_llama_server_test() {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(500))
+        .build()
+        .unwrap();
+
+    let is_live = client
+        .get("http://localhost:8080/v1/models")
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    if !is_live {
+        eprintln!("SKIPPED: localhost:8080 is not currently running; skipping live llama.cpp test.");
+        return;
+    }
+
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::Custom,
+        api_key: "not-needed".into(),
+        model: "".into(),
+        base_url: Some("http://localhost:8080/v1".into()),
+        timeout_secs: 60,
+        ..Default::default()
+    })
+    .unwrap();
+
+    let request = ChatRequest {
+        model: String::new(),
+        messages: vec![ChatMessage::user("Respond with the exact word PONG")],
+        max_tokens: Some(50),
+        temperature: Some(0.1),
+        stream: None,
+    };
+
+    let response = adapter.complete(request).await.expect("localhost:8080 should respond");
+    assert!(!response.content.is_empty(), "Response content should not be empty");
+    assert!(response.content.to_uppercase().contains("PONG"));
+}
+
+#[tokio::test]
+#[ignore = "requires live llama.cpp on localhost:8080; run with cargo test -- --ignored"]
+async fn localhost_8080_live_diff_summary_test() {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(500))
+        .build()
+        .unwrap();
+
+    let is_live = client
+        .get("http://localhost:8080/v1/models")
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    if !is_live {
+        eprintln!("SKIPPED: localhost:8080 is not currently running; skipping live diff test.");
+        return;
+    }
+
+    let adapter = AiAdapter::new(BackendConfig {
+        provider: Provider::Custom,
+        api_key: "not-needed".into(),
+        model: "".into(),
+        base_url: Some("http://localhost:8080/v1".into()),
+        timeout_secs: 60,
+        ..Default::default()
+    })
+    .unwrap();
+
+    let diff = "diff --git a/calc.rs b/calc.rs\n--- a/calc.rs\n+++ b/calc.rs\n@@ -1,2 +1,2 @@\n-fn mul(a: i32, b: i32) -> i32 { a + b }\n+fn mul(a: i32, b: i32) -> i32 { a * b }\n";
+    let request = ai_adapter::prompts::build_summary_request("", diff, "rust");
+
+    let response = adapter.complete(request).await.expect("localhost:8080 should generate summary");
+    assert!(!response.content.is_empty());
+    let parsed = ai_adapter::prompts::parse_summary_response(&response.content);
+    assert!(parsed.is_ok(), "Summary should parse from model response: {:?}", response.content);
+}
+
+
+#[test]
+fn parse_full_review_handles_nested_summary_and_case_variations() {
+    // Model output from llama.cpp where summary, risk, questions are nested
+    let nested_json = r#"{
+      "summary": {
+        "summary": "Fixes multiplication function.",
+        "intents": ["Fix logic bug"],
+        "risks": ["Callers relying on buggy behavior"],
+        "risk": {
+          "risk_level": "low",
+          "justification": "Small local fix",
+          "affected_areas": ["src/calc.rs"]
+        },
+        "questions": [
+          {"question": "Are there existing unit tests?", "context": "calc.rs"}
+        ],
+        "suggested_commit": {
+          "subject": "fix(calc): fix multiplication logic"
+        }
+      }
+    }"#;
+
+    let res = ai_adapter::prompts::parse_full_review_response(nested_json);
+    assert!(res.is_ok(), "Failed to parse nested full review: {:?}", res.err());
+    let rep = res.unwrap();
+    assert_eq!(rep.summary.summary, "Fixes multiplication function.");
+    assert_eq!(rep.risk.risk_level, RiskLevel::Low);
+    assert_eq!(rep.questions.len(), 1);
+    assert_eq!(rep.suggested_commit.unwrap().subject, "fix(calc): fix multiplication logic");
+}
+

@@ -1,6 +1,6 @@
 import { isTauri } from './tauriDetect';
 import { compareAi } from './tauri';
-import type { AiCompareRequest } from './types';
+import type { AiCompareRequest, AiProvider } from './types';
 
 export interface PromptPackageMetadata {
   id: string;
@@ -381,6 +381,36 @@ export const PRECOMPUTED_INSIGHTS: Record<
 };
 
 /**
+ * Cleans markdown code fences, think tags, and conversational wrapper text from JSON output.
+ */
+export function cleanJsonText(raw: string): string {
+  // Strip reasoning / thinking sections (e.g. DeepSeek-R1 / Qwen models)
+  let text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // Strip markdown code fences
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // Find outermost valid JSON object or array bounds
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  let start = -1;
+  let end = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    start = firstBrace;
+    end = text.lastIndexOf('}');
+  } else if (firstBracket !== -1) {
+    start = firstBracket;
+    end = text.lastIndexOf(']');
+  }
+
+  if (start !== -1 && end !== -1 && end > start) {
+    text = text.slice(start, end + 1);
+  }
+
+  return text;
+}
+
+/**
  * Execute a prompt package on a diff, using either precomputed preset results or live LLM.
  */
 export async function executePromptPackage(options: {
@@ -388,17 +418,17 @@ export async function executePromptPackage(options: {
   diffText: string;
   targetStr?: string;
   language?: string;
-  provider?: 'openai' | 'anthropic' | 'custom';
+  provider?: AiProvider;
   apiKey?: string;
   model?: string;
   baseUrl?: string;
 }): Promise<{ data: any; isPreset: boolean }> {
   const { packageId, diffText, targetStr, language = 'text', provider = 'openai', apiKey, model, baseUrl } = options;
 
-  // 1. If target is a known preset and no API key is specified, return precomputed instantly
+  // 1. If target is a known preset and no API key is specified (for cloud providers), return precomputed instantly
   if (targetStr && PRECOMPUTED_INSIGHTS[targetStr]) {
     const preset = PRECOMPUTED_INSIGHTS[targetStr];
-    if (packageId in preset && (!apiKey || !apiKey.trim())) {
+    if (packageId in preset && provider !== 'custom' && (!apiKey || !apiKey.trim())) {
       return {
         data: (preset as any)[packageId],
         isPreset: true,
@@ -406,8 +436,9 @@ export async function executePromptPackage(options: {
     }
   }
 
-  // 2. Fallback to generic precomputed React fixture if diff matches or no API key is present
-  if (!apiKey || !apiKey.trim()) {
+  // 2. Fallback to generic precomputed React fixture if diff matches or no API key is present for cloud providers.
+  // Custom local providers (e.g. localhost:8080 or Ollama) do not require an API key.
+  if (provider !== 'custom' && (!apiKey || !apiKey.trim())) {
     const defaultPreset = PRECOMPUTED_INSIGHTS['facebook/react#28000'];
     if (packageId in defaultPreset) {
       return {
@@ -441,10 +472,19 @@ export async function executePromptPackage(options: {
 
   // A. If in Tauri desktop app, use Tauri IPC `compareAi`
   if (isTauri) {
+    const defaultModel =
+      provider === 'anthropic'
+        ? 'claude-3-5-sonnet-latest'
+        : provider === 'openrouter'
+        ? 'anthropic/claude-3.5-sonnet'
+        : provider === 'custom'
+        ? 'default'
+        : 'gpt-4o-mini';
+
     const req: AiCompareRequest = {
       provider,
       api_key: apiKey || '',
-      model: model || (provider === 'anthropic' ? 'claude-3-5-sonnet-latest' : 'gpt-4o-mini'),
+      model: model || defaultModel,
       base_url: baseUrl,
       temperature: pkg?.default_temperature ?? 0.3,
       max_tokens: pkg?.default_max_tokens ?? 1024,
@@ -454,11 +494,11 @@ export async function executePromptPackage(options: {
       ],
     };
     const res = await compareAi(req);
-    const cleaned = res.content.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+    const cleaned = cleanJsonText(res.content);
     return { data: JSON.parse(cleaned), isPreset: false };
   }
 
-  // B. Browser web execution (fetch directly to OpenAI/Anthropic/Ollama)
+  // B. Browser web execution (fetch directly to OpenAI/Anthropic/OpenRouter/Local)
   if (provider === 'openai' || !provider) {
     const endpoint = baseUrl || 'https://api.openai.com/v1/chat/completions';
     const response = await fetch(endpoint, {
@@ -482,8 +522,7 @@ export async function executePromptPackage(options: {
     }
     const json = await response.json();
     const rawContent = json.choices?.[0]?.message?.content || '';
-    const cleaned = rawContent.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return { data: JSON.parse(cleaned), isPreset: false };
+    return { data: JSON.parse(cleanJsonText(rawContent)), isPreset: false };
   } else if (provider === 'anthropic') {
     const endpoint = baseUrl || 'https://api.anthropic.com/v1/messages';
     const response = await fetch(endpoint, {
@@ -507,11 +546,36 @@ export async function executePromptPackage(options: {
     }
     const json = await response.json();
     const rawContent = json.content?.[0]?.text || '';
-    const cleaned = rawContent.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return { data: JSON.parse(cleaned), isPreset: false };
+    return { data: JSON.parse(cleanJsonText(rawContent)), isPreset: false };
+  } else if (provider === 'openrouter') {
+    const endpoint = baseUrl || 'https://openrouter.ai/api/v1/chat/completions';
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://github.com/charley/diff-tool',
+        'X-Title': 'Diff Tool AI',
+      },
+      body: JSON.stringify({
+        model: model || 'anthropic/claude-3.5-sonnet',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: pkg?.default_temperature ?? 0.3,
+        max_tokens: pkg?.default_max_tokens ?? 1024,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+    }
+    const json = await response.json();
+    const rawContent = json.choices?.[0]?.message?.content || '';
+    return { data: JSON.parse(cleanJsonText(rawContent)), isPreset: false };
   } else {
-    // Custom / Ollama endpoint (OpenAI compatible)
-    const endpoint = baseUrl || 'http://localhost:11434/v1/chat/completions';
+    // Custom / Local endpoint (e.g. localhost:8080, Ollama)
+    const endpoint = baseUrl || 'http://localhost:8080/v1/chat/completions';
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -519,7 +583,7 @@ export async function executePromptPackage(options: {
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: model || 'llama3',
+        model: model || 'default',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -533,7 +597,6 @@ export async function executePromptPackage(options: {
     }
     const json = await response.json();
     const rawContent = json.choices?.[0]?.message?.content || '';
-    const cleaned = rawContent.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return { data: JSON.parse(cleaned), isPreset: false };
+    return { data: JSON.parse(cleanJsonText(rawContent)), isPreset: false };
   }
 }

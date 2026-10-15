@@ -87,7 +87,9 @@ pub enum Chunk {
 pub enum Provider {
     OpenAI,
     Anthropic,
-    /// An OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, etc.).
+    /// OpenRouter aggregator (OpenAI-compatible API with https://openrouter.ai/api/v1).
+    OpenRouter,
+    /// An OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM, LM Studio, etc.).
     Custom,
 }
 
@@ -173,8 +175,11 @@ pub struct FileRiskAssessment {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RiskLevel {
+    #[serde(alias = "Low", alias = "LOW")]
     Low,
+    #[serde(alias = "Medium", alias = "MEDIUM")]
     Medium,
+    #[serde(alias = "High", alias = "HIGH")]
     High,
 }
 

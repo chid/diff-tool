@@ -28,6 +28,7 @@ import {
   type AiCommitMessage,
   type AiHunkExplanation,
 } from '../aiPromptPacks';
+import type { AiProvider } from '../types';
 
 interface AiInsightsDrawerProps {
   diffText: string;
@@ -54,7 +55,7 @@ export function AiInsightsDrawer({
 
   // Settings / BYOK
   const [showConfig, setShowConfig] = useState(false);
-  const [provider, setProvider] = useState<'openai' | 'anthropic' | 'custom'>(
+  const [provider, setProvider] = useState<AiProvider>(
     () => (localStorage.getItem('diff-tool-ai-provider') as any) || 'openai'
   );
   const [apiKey, setApiKey] = useState<string>(
@@ -70,7 +71,7 @@ export function AiInsightsDrawer({
   // Copy feedbacks
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
-  const saveConfig = (p: 'openai' | 'anthropic' | 'custom', k: string, m: string, u: string) => {
+  const saveConfig = (p: AiProvider, k: string, m: string, u: string) => {
     setProvider(p);
     setApiKey(k);
     setModel(m);
@@ -205,7 +206,8 @@ export function AiInsightsDrawer({
                   >
                     <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
                     <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
-                    <option value="custom">Custom / Ollama (Local)</option>
+                    <option value="openrouter">OpenRouter (Claude, Llama, Qwen, DeepSeek)</option>
+                    <option value="custom">Custom / Local (localhost:8080, Ollama)</option>
                   </select>
                 </label>
 
@@ -213,7 +215,11 @@ export function AiInsightsDrawer({
                   <span>API Key:</span>
                   <input
                     type="password"
-                    placeholder="sk-... (stored locally in browser)"
+                    placeholder={
+                      provider === 'custom'
+                        ? 'Optional for local (e.g. localhost:8080)'
+                        : 'sk-... (stored locally in browser)'
+                    }
                     value={apiKey}
                     onChange={(e) =>
                       saveConfig(provider, e.target.value, model, baseUrl)
@@ -229,8 +235,10 @@ export function AiInsightsDrawer({
                     placeholder={
                       provider === 'anthropic'
                         ? 'claude-3-5-sonnet-latest'
+                        : provider === 'openrouter'
+                        ? 'anthropic/claude-3.5-sonnet'
                         : provider === 'custom'
-                        ? 'llama3'
+                        ? 'default'
                         : 'gpt-4o-mini'
                     }
                     value={model}
@@ -241,12 +249,16 @@ export function AiInsightsDrawer({
                   />
                 </label>
 
-                {provider === 'custom' && (
+                {(provider === 'custom' || provider === 'openrouter') && (
                   <label className="ai-config-label flex-grow">
                     <span>Base URL:</span>
                     <input
                       type="text"
-                      placeholder="http://localhost:11434/v1/chat/completions"
+                      placeholder={
+                        provider === 'openrouter'
+                          ? 'https://openrouter.ai/api/v1/chat/completions'
+                          : 'http://localhost:8080/v1/chat/completions'
+                      }
                       value={baseUrl}
                       onChange={(e) =>
                         saveConfig(provider, apiKey, model, e.target.value)

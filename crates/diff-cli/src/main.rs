@@ -172,7 +172,7 @@ enum Command {
     },
     /// AI-powered diff analysis (summaries, commit messages, risk assessment).
     Ai {
-        /// LLM provider: openai, anthropic, or custom.
+        /// LLM provider: openai, anthropic, openrouter, or custom.
         #[arg(long, default_value = "openai")]
         provider: String,
         /// API key (or set OPENAI_API_KEY / ANTHROPIC_API_KEY env var).
@@ -606,8 +606,9 @@ fn run_ai(
         Some(k) if !k.is_empty() => k,
         _ => {
             eprintln!("error: no API key provided. Use --api-key or set");
-            let env_var = match provider.as_str() {
+            let env_var = match provider.to_lowercase().as_str() {
                 "anthropic" => "ANTHROPIC_API_KEY",
+                "openrouter" => "OPENROUTER_API_KEY",
                 _ => "OPENAI_API_KEY",
             };
             eprintln!("       the {env_var} environment variable.");
@@ -630,8 +631,9 @@ fn run_ai(
     }
 
     // 3. Build BackendConfig.
-    let provider_enum = match provider.as_str() {
+    let provider_enum = match provider.to_lowercase().as_str() {
         "anthropic" => Provider::Anthropic,
+        "openrouter" => Provider::OpenRouter,
         "custom" => Provider::Custom,
         _ => Provider::OpenAI,
     };
@@ -639,6 +641,7 @@ fn run_ai(
         match provider_enum {
             Provider::OpenAI => "gpt-4o-mini",
             Provider::Anthropic => "claude-sonnet-4-20250514",
+            Provider::OpenRouter => "anthropic/claude-3.5-sonnet",
             Provider::Custom => "",
         }
         .to_string()
@@ -988,8 +991,9 @@ fn run_ai(
 
 /// Resolve API key from environment variable based on provider.
 fn resolve_api_key_from_env(provider: &str) -> Option<String> {
-    match provider {
+    match provider.to_lowercase().as_str() {
         "anthropic" => std::env::var("ANTHROPIC_API_KEY").ok(),
+        "openrouter" => std::env::var("OPENROUTER_API_KEY").ok(),
         _ => std::env::var("OPENAI_API_KEY").ok(),
     }
 }

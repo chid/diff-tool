@@ -510,3 +510,62 @@ fn ai_run_unknown_package_exits_2() {
         .stderr(predicate::str::contains("unknown prompt package"));
 }
 
+#[test]
+fn ai_openrouter_requires_api_key_or_env() {
+    cmd()
+        .args(["ai", "--provider", "openrouter", "run", "change-summary"])
+        .env_remove("OPENROUTER_API_KEY")
+        .env_remove("OPENAI_API_KEY")
+        .write_stdin("diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("OPENROUTER_API_KEY"));
+}
+
+#[test]
+fn ai_openrouter_accepts_key_and_custom_base_url() {
+    // Port 19999 is intentionally unbound to test wire connection failure cleanly
+    cmd()
+        .args([
+            "ai",
+            "--provider",
+            "openrouter",
+            "--api-key",
+            "sk-or-test",
+            "--base-url",
+            "http://127.0.0.1:19999/v1",
+            "run",
+            "change-summary",
+        ])
+        .write_stdin("diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("error: AI request failed"));
+}
+
+#[test]
+#[ignore = "requires live llama.cpp on localhost:8080; run with cargo test -- --ignored"]
+fn ai_localhost_8080_custom_provider_live_or_skipped() {
+    let diff = "diff --git a/math.rs b/math.rs\n--- a/math.rs\n+++ b/math.rs\n@@ -1 +1 @@\n-fn sub(a: i32, b: i32) -> i32 { a - b }\n+fn sub(a: i32, b: i32) -> i32 { a - b }\n";
+    let output = cmd()
+        .args([
+            "ai",
+            "--provider",
+            "custom",
+            "--base-url",
+            "http://127.0.0.1:8080/v1",
+            "--api-key",
+            "dummy",
+            "run",
+            "change-summary",
+        ])
+        .write_stdin(diff)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Summary:"), "Output was: {stdout}");
+}
+
+

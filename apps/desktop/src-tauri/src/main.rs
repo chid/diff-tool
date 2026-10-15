@@ -247,6 +247,7 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
     match provider {
         Provider::OpenAI => "gpt-4o-mini",
         Provider::Anthropic => "claude-sonnet-4-20250514",
+        Provider::OpenRouter => "anthropic/claude-3.5-sonnet",
         Provider::Custom => "",
     }
 }

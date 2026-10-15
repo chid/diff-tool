@@ -128,7 +128,7 @@ export interface FolderDiff {
 
 // ── AI compare types ───────────────────────────────────────────────
 
-export type AiProvider = 'openai' | 'anthropic' | 'custom';
+export type AiProvider = 'openai' | 'anthropic' | 'openrouter' | 'custom';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant';

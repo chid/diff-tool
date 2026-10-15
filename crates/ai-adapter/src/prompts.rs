@@ -286,47 +286,130 @@ pub fn build_explain_hunk_request(
 
 // ── Response parsers ──────────────────────────────────────────────────────
 
+fn strip_json_fences(input: &str) -> &str {
+    let mut s = input.trim();
+    if s.starts_with("```") {
+        if let Some(newline) = s.find('\n') {
+            s = &s[newline + 1..];
+        }
+        if let Some(end) = s.rfind("```") {
+            s = &s[..end];
+        }
+    }
+    s.trim()
+}
+
 /// Parse an LLM JSON response into an `AiChangeSummary`.
 pub fn parse_summary_response(json: &str) -> Result<AiChangeSummary, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse summary: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse summary: {e}"))
 }
 
 /// Parse an LLM JSON response into an `AiMergeResolution`.
 pub fn parse_merge_response(json: &str) -> Result<AiMergeResolution, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse merge: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse merge: {e}"))
 }
 
 /// Parse an LLM JSON response into a `FileRiskAssessment`.
 pub fn parse_risk_response(json: &str) -> Result<FileRiskAssessment, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse risk: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse risk: {e}"))
 }
 
 /// Parse an LLM JSON response into a `Vec<FileCluster>`.
 pub fn parse_cluster_response(json: &str) -> Result<Vec<FileCluster>, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse clusters: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse clusters: {e}"))
 }
 
 /// Parse an LLM JSON response into a `Vec<ReviewQuestion>`.
 pub fn parse_review_questions_response(json: &str) -> Result<Vec<ReviewQuestion>, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse questions: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse questions: {e}"))
 }
 
 /// Parse an LLM JSON response into an `AiCommitMessage`.
 pub fn parse_commit_msg_response(json: &str) -> Result<AiCommitMessage, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse commit: {e}"))
+    serde_json::from_str(strip_json_fences(json)).map_err(|e| format!("failed to parse commit: {e}"))
 }
 
 /// Parse an LLM JSON response into an `AiFullReviewReport`.
 pub fn parse_full_review_response(json: &str) -> Result<AiFullReviewReport, String> {
-    serde_json::from_str(json).map_err(|e| format!("failed to parse full review: {e}"))
+    let clean = strip_json_fences(json);
+    if let Ok(rep) = serde_json::from_str::<AiFullReviewReport>(clean) {
+        return Ok(rep);
+    }
+
+    // Handle models that wrap fields inside a nested "summary", "review", or "report" object
+    let val: serde_json::Value = match serde_json::from_str(clean) {
+        Ok(v) => v,
+        Err(e) => return Err(format!("failed to parse full review JSON: {e}")),
+    };
+
+    let root = if let Some(r) = val.get("review") {
+        r
+    } else if let Some(r) = val.get("report") {
+        r
+    } else {
+        &val
+    };
+
+    if let Ok(rep) = serde_json::from_value::<AiFullReviewReport>(root.clone()) {
+        return Ok(rep);
+    }
+
+    if let Some(summary_obj) = root.get("summary") {
+        if summary_obj.get("risk").is_some() || summary_obj.get("questions").is_some() {
+            let summary_text = summary_obj
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let intents: Vec<String> = summary_obj
+                .get("intents")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let risks: Vec<String> = summary_obj
+                .get("risks")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+
+            let risk: FileRiskAssessment = summary_obj
+                .get("risk")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .or_else(|| root.get("risk").and_then(|v| serde_json::from_value(v.clone()).ok()))
+                .ok_or_else(|| "missing field `risk` in response".to_string())?;
+
+            let questions: Vec<ReviewQuestion> = summary_obj
+                .get("questions")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .or_else(|| root.get("questions").and_then(|v| serde_json::from_value(v.clone()).ok()))
+                .unwrap_or_default();
+
+            let suggested_commit: Option<AiCommitMessage> = summary_obj
+                .get("suggested_commit")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .or_else(|| root.get("suggested_commit").and_then(|v| serde_json::from_value(v.clone()).ok()));
+
+            return Ok(AiFullReviewReport {
+                summary: AiChangeSummary {
+                    summary: summary_text,
+                    intents,
+                    risks,
+                },
+                risk,
+                questions,
+                suggested_commit,
+            });
+        }
+    }
+
+    serde_json::from_str(clean).map_err(|e| format!("failed to parse full review: {e}"))
 }
 
 /// Parse an LLM response into an `AiHunkExplanation`.
 pub fn parse_explain_hunk_response(text_or_json: &str) -> Result<AiHunkExplanation, String> {
-    if let Ok(parsed) = serde_json::from_str::<AiHunkExplanation>(text_or_json) {
+    let clean = strip_json_fences(text_or_json);
+    if let Ok(parsed) = serde_json::from_str::<AiHunkExplanation>(clean) {
         return Ok(parsed);
     }
-    let trimmed = text_or_json.trim();
+    let trimmed = clean.trim();
     if trimmed.is_empty() {
         return Err("empty explanation response".into());
     }

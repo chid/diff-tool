@@ -150,6 +150,25 @@ impl AiAdapter {
                 config.temperature,
                 reqwest_client,
             )),
+            Provider::OpenRouter => {
+                let base_url = config
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://openrouter.ai/api/v1".to_string());
+                let model = if config.model.is_empty() {
+                    "anthropic/claude-3.5-sonnet".to_string()
+                } else {
+                    config.model.clone()
+                };
+                Box::new(openai::OpenAiBackend::new(
+                    config.api_key.clone(),
+                    model,
+                    Some(base_url),
+                    config.max_tokens,
+                    config.temperature,
+                    reqwest_client,
+                ))
+            }
             Provider::Custom => {
                 let base_url = config.base_url.as_deref().ok_or_else(|| {
                     AiError::Config("Custom provider requires base_url".into())
