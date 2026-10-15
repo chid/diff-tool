@@ -223,16 +223,47 @@ enum AiCommand {
         #[arg(long, default_value = "text")]
         language: String,
     },
+    /// Comprehensive code review report (summary, risk assessment, reviewer questions, and commit suggestion).
+    FullReview {
+        /// Language of the changed code.
+        #[arg(long, default_value = "text")]
+        language: String,
+    },
     /// Generate a conventional commit message from a diff.
     GenerateCommitMsg,
     /// Assess the risk level of a code change.
     AssessRisk {
         /// The file path the diff applies to.
-        #[arg(long)]
+        #[arg(long, default_value = "file")]
         file_path: String,
         /// Language of the changed code.
         #[arg(long, default_value = "text")]
         language: String,
+    },
+    /// Generate targeted reviewer questions for the author.
+    ReviewQuestions {
+        /// Language of the changed code.
+        #[arg(long, default_value = "text")]
+        language: String,
+    },
+    /// Explain a diff hunk or code selection in plain English.
+    ExplainHunk {
+        /// Language of the changed code.
+        #[arg(long, default_value = "text")]
+        language: String,
+    },
+    /// List all available prompt packages with versions and metadata.
+    ListPackages,
+    /// Execute a named prompt package (e.g. "full-review", "change-summary", "risk-assessment").
+    Run {
+        /// Name or ID of the prompt package.
+        package: String,
+        /// Optional language override.
+        #[arg(long)]
+        language: Option<String>,
+        /// Optional file path context.
+        #[arg(long)]
+        file_path: Option<String>,
     },
 }
 
@@ -551,6 +582,25 @@ fn run_ai(
     json: bool,
     command: AiCommand,
 ) -> i32 {
+    // 0. Handle commands that don't need API keys or diff input.
+    if let AiCommand::ListPackages = &command {
+        let packages = ai_adapter::prompts::list_prompt_packages();
+        if json {
+            if let Ok(j) = serde_json::to_string_pretty(&packages) {
+                println!("{j}");
+            }
+        } else {
+            println!("Available AI Prompt Packages:\n");
+            for p in &packages {
+                println!("  {:18} {:30} v{} ({:?})", p.id, p.name, p.version, p.category);
+                println!("    {}", p.description);
+                println!("    Tags: {}", p.tags.join(", "));
+                println!();
+            }
+        }
+        return EXIT_SUCCESS;
+    }
+
     // 1. Resolve API key: flag > env var > prompt for error.
     let api_key = match api_key.or_else(|| resolve_api_key_from_env(&provider)) {
         Some(k) if !k.is_empty() => k,
@@ -612,7 +662,13 @@ fn run_ai(
 
     // 5. Build the ChatRequest using the prompts module.
     let chat_request = match &command {
+        AiCommand::ListPackages => unreachable!(),
         AiCommand::GenerateSummary { language } => ai_adapter::prompts::build_summary_request(
+            adapter.config().model.as_str(),
+            &diff_text,
+            language,
+        ),
+        AiCommand::FullReview { language } => ai_adapter::prompts::build_full_review_request(
             adapter.config().model.as_str(),
             &diff_text,
             language,
@@ -630,6 +686,35 @@ fn run_ai(
             &diff_text,
             language,
         ),
+        AiCommand::ReviewQuestions { language } => {
+            ai_adapter::prompts::build_review_questions_request(
+                adapter.config().model.as_str(),
+                &diff_text,
+                language,
+            )
+        }
+        AiCommand::ExplainHunk { language } => ai_adapter::prompts::build_explain_hunk_request(
+            adapter.config().model.as_str(),
+            &diff_text,
+            language,
+        ),
+        AiCommand::Run {
+            package,
+            language,
+            file_path,
+        } => match ai_adapter::prompts::build_package_request(
+            package,
+            adapter.config().model.as_str(),
+            &diff_text,
+            language.as_deref(),
+            file_path.as_deref(),
+        ) {
+            Ok(req) => req,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return EXIT_ERROR;
+            }
+        },
     };
 
     // 6. Call the LLM.
@@ -647,6 +732,7 @@ fn run_ai(
 
     // 7 & 8. Parse and output.
     match &command {
+        AiCommand::ListPackages => unreachable!(),
         AiCommand::GenerateSummary { .. } => {
             match ai_adapter::prompts::parse_summary_response(&response.content) {
                 Ok(summary) => {
@@ -672,6 +758,55 @@ fn run_ai(
                 }
                 Err(e) => {
                     eprintln!("error: failed to parse AI response: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+        AiCommand::FullReview { .. } => {
+            match ai_adapter::prompts::parse_full_review_response(&response.content) {
+                Ok(report) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&report) {
+                            println!("{j}");
+                        }
+                    } else {
+                        println!("=== AI Code Review Report ===\n");
+                        println!("TL;DR: {}", report.summary.summary);
+                        if !report.summary.intents.is_empty() {
+                            println!("\nKey Intents:");
+                            for intent in &report.summary.intents {
+                                println!("  • {intent}");
+                            }
+                        }
+                        let level_str = match report.risk.risk_level {
+                            RiskLevel::Low => "LOW",
+                            RiskLevel::Medium => "MEDIUM",
+                            RiskLevel::High => "HIGH",
+                        };
+                        println!("\nRisk Rating: {level_str}");
+                        println!("Justification: {}", report.risk.justification);
+                        if !report.risk.affected_areas.is_empty() {
+                            println!("Affected Areas: {}", report.risk.affected_areas.join(", "));
+                        }
+                        if !report.questions.is_empty() {
+                            println!("\nReviewer Questions to Ask:");
+                            for (i, q) in report.questions.iter().enumerate() {
+                                println!("  {}. {}", i + 1, q.question);
+                                if let Some(ctx) = &q.context {
+                                    println!("     Context: {ctx}");
+                                }
+                            }
+                        }
+                        if let Some(commit) = &report.suggested_commit {
+                            println!("\nSuggested Commit: {}", commit.subject);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse AI full review response: {e}");
                     if !json {
                         eprintln!("raw response: {}", response.content);
                     }
@@ -736,6 +871,115 @@ fn run_ai(
                     return EXIT_ERROR;
                 }
             }
+        }
+        AiCommand::ReviewQuestions { .. } => {
+            match ai_adapter::prompts::parse_review_questions_response(&response.content) {
+                Ok(questions) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&questions) {
+                            println!("{j}");
+                        }
+                    } else {
+                        println!("Reviewer Questions:");
+                        for (i, q) in questions.iter().enumerate() {
+                            println!("  {}. {}", i + 1, q.question);
+                            if let Some(ctx) = &q.context {
+                                println!("     Context: {ctx}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse AI review questions: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+        AiCommand::ExplainHunk { .. } => {
+            match ai_adapter::prompts::parse_explain_hunk_response(&response.content) {
+                Ok(exp) => {
+                    if json {
+                        if let Ok(j) = serde_json::to_string_pretty(&exp) {
+                            println!("{j}");
+                        }
+                    } else {
+                        println!("Explanation:\n{}", exp.explanation);
+                        if !exp.key_points.is_empty() {
+                            println!("\nKey Points:");
+                            for pt in &exp.key_points {
+                                println!("  • {pt}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to parse explanation: {e}");
+                    if !json {
+                        eprintln!("raw response: {}", response.content);
+                    }
+                    return EXIT_ERROR;
+                }
+            }
+        }
+        AiCommand::Run { package, .. } => {
+            match package.as_str() {
+                "full-review" => {
+                    if let Ok(rep) = ai_adapter::prompts::parse_full_review_response(&response.content) {
+                        if json {
+                            println!("{}", serde_json::to_string_pretty(&rep).unwrap());
+                        } else {
+                            println!("Summary: {}", rep.summary.summary);
+                        }
+                        return EXIT_SUCCESS;
+                    }
+                }
+                "change-summary" | "summary" => {
+                    if let Ok(sum) = ai_adapter::prompts::parse_summary_response(&response.content) {
+                        if json {
+                            println!("{}", serde_json::to_string_pretty(&sum).unwrap());
+                        } else {
+                            println!("Summary: {}", sum.summary);
+                        }
+                        return EXIT_SUCCESS;
+                    }
+                }
+                "commit-message" | "commit" => {
+                    if let Ok(msg) = ai_adapter::prompts::parse_commit_msg_response(&response.content) {
+                        if json {
+                            println!("{}", serde_json::to_string_pretty(&msg).unwrap());
+                        } else {
+                            println!("{}", msg.subject);
+                        }
+                        return EXIT_SUCCESS;
+                    }
+                }
+                "risk-assessment" | "risk" => {
+                    if let Ok(risk) = ai_adapter::prompts::parse_risk_response(&response.content) {
+                        if json {
+                            println!("{}", serde_json::to_string_pretty(&risk).unwrap());
+                        } else {
+                            println!("Risk: {:?}", risk.risk_level);
+                        }
+                        return EXIT_SUCCESS;
+                    }
+                }
+                "review-questions" | "questions" => {
+                    if let Ok(qs) = ai_adapter::prompts::parse_review_questions_response(&response.content) {
+                        if json {
+                            println!("{}", serde_json::to_string_pretty(&qs).unwrap());
+                        } else {
+                            for q in qs { println!("- {}", q.question); }
+                        }
+                        return EXIT_SUCCESS;
+                    }
+                }
+                _ => {}
+            }
+            // Generic output
+            println!("{}", response.content);
         }
     }
 

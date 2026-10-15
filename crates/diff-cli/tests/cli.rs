@@ -468,3 +468,45 @@ fn dir_two_folders_exit_2_when_missing() {
         .code(2)
         .stderr(predicate::str::contains("error:"));
 }
+
+#[test]
+fn ai_list_packages_succeeds_without_api_key() {
+    let output = cmd()
+        .args(["ai", "list-packages"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("full-review"));
+    assert!(stdout.contains("Comprehensive Code Review"));
+    assert!(stdout.contains("risk-assessment"));
+    assert!(stdout.contains("commit-message"));
+}
+
+#[test]
+fn ai_list_packages_json_output() {
+    let output = cmd()
+        .args(["ai", "--json", "list-packages"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(json.is_array());
+    let pkgs = json.as_array().unwrap();
+    assert!(pkgs.iter().any(|p| p["id"] == "full-review"));
+    assert!(pkgs.iter().any(|p| p["id"] == "review-questions"));
+    assert!(pkgs.iter().any(|p| p["id"] == "explain-hunk"));
+}
+
+#[test]
+fn ai_run_unknown_package_exits_2() {
+    cmd()
+        .args(["ai", "--api-key", "dummy", "run", "nonexistent-pack"])
+        .write_stdin("diff --git a/a b/a\n")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("unknown prompt package"));
+}
+

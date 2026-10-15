@@ -47,9 +47,11 @@ pub use anthropic::AnthropicBackend;
 pub use openai::OpenAiBackend;
 
 pub use types::{
-    AiChangeSummary, AiCommitMessage, AiMergeResolution, BackendConfig, ChatMessage,
-    ChatRequest, ChatResponse, Chunk, ConflictHunkResolution, FileCluster,
-    FileRiskAssessment, Provider, ReviewQuestion, RiskLevel, Role, Usage,
+    AiChangeSummary, AiCommitMessage, AiFullReviewReport, AiHunkExplanation,
+    AiMergeResolution, BackendConfig, ChatMessage, ChatRequest, ChatResponse,
+    Chunk, ConflictHunkResolution, FileCluster, FileRiskAssessment,
+    PromptCategory, PromptPackageMetadata, Provider, ReviewQuestion,
+    RiskLevel, Role, Usage,
 };
 
 use async_trait::async_trait;

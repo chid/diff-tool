@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { useSettings } from './SettingsContext';
 import { settingsToFileDiffOptions } from '../settingsTypes';
+import { AiInsightsDrawer } from './AiInsightsDrawer';
+
 
 export interface GitHubTarget {
   owner: string;
@@ -125,6 +127,8 @@ export function GitHubReview() {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [searchFilter, setSearchFilter] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(true);
+
 
   // Raw patch paste mode
   const [rawPatchMode, setRawPatchMode] = useState(false);
@@ -382,6 +386,30 @@ export function GitHubReview() {
 
   const activeEntry = filteredFiles[activeFileIndex] ?? files[0];
 
+  const currentDiffText = useMemo(() => {
+    if (rawPatchMode && rawPatchText.trim()) {
+      return rawPatchText;
+    }
+    if (activeEntry?.patch) {
+      return `diff --git a/${activeEntry.filename} b/${activeEntry.filename}\n${activeEntry.patch}`;
+    }
+    const combined = files
+      .filter((f) => f.patch)
+      .slice(0, 5)
+      .map((f) => `diff --git a/${f.filename} b/${f.filename}\n${f.patch}`)
+      .join('\n\n');
+    return combined;
+  }, [rawPatchMode, rawPatchText, activeEntry, files]);
+
+  const currentLanguage = useMemo(() => {
+    const fn = activeEntry?.filename || '';
+    if (fn.endsWith('.ts') || fn.endsWith('.tsx')) return 'typescript';
+    if (fn.endsWith('.rs')) return 'rust';
+    if (fn.endsWith('.py')) return 'python';
+    if (fn.endsWith('.js') || fn.endsWith('.jsx')) return 'javascript';
+    return 'text';
+  }, [activeEntry]);
+
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopiedLink(true);
@@ -434,6 +462,15 @@ export function GitHubReview() {
           ))}
           <button
             type="button"
+            className={`preset-chip ${aiDrawerOpen ? 'chip-ai-active' : ''}`}
+            onClick={() => setAiDrawerOpen(!aiDrawerOpen)}
+            title="Toggle AI Diff Insights (8 Prompt Packs)"
+          >
+            <Sparkles size={12} color="#c084fc" />
+            <span>AI Insights</span>
+          </button>
+          <button
+            type="button"
             className="preset-chip chip-outline"
             onClick={() => setRawPatchMode(!rawPatchMode)}
           >
@@ -449,6 +486,7 @@ export function GitHubReview() {
             <span>{token ? 'Token set' : 'Add token'}</span>
           </button>
         </div>
+
       </header>
 
       {/* ── Optional GitHub Token Drawer ────────────────── */}
@@ -569,8 +607,19 @@ export function GitHubReview() {
         </div>
       )}
 
+      {/* ── AI Diff Insights Drawer (8 Prompt Packages) ── */}
+      <AiInsightsDrawer
+        diffText={currentDiffText}
+        targetStr={urlInput}
+        fileName={activeEntry?.filename}
+        language={currentLanguage}
+        isOpen={aiDrawerOpen}
+        onToggle={() => setAiDrawerOpen(!aiDrawerOpen)}
+      />
+
       {/* ── Main Review Area (Sidebar Files + Pierre Diff Pane) ── */}
       <div className="gh-review-body">
+
         {/* Left: Files Navigation */}
         <aside className="gh-files-sidebar">
           <div className="gh-files-header">

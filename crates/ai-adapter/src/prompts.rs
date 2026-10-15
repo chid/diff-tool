@@ -8,13 +8,15 @@
 #![allow(dead_code)]
 
 use crate::types::{
-    AiChangeSummary, AiCommitMessage, AiMergeResolution, ChatMessage, ChatRequest,
-    FileCluster, FileRiskAssessment, ReviewQuestion,
+    AiChangeSummary, AiCommitMessage, AiFullReviewReport, AiHunkExplanation,
+    AiMergeResolution, ChatMessage, ChatRequest, FileCluster, FileRiskAssessment,
+    PromptCategory, PromptPackageMetadata, ReviewQuestion,
 };
 
 // ── Prompt template versions (bump to invalidate cache) ────────────────────
 
 pub const SUMMARY_PROMPT_VERSION: u32 = 1;
+pub const FULL_REVIEW_PROMPT_VERSION: u32 = 1;
 pub const MERGE_PROMPT_VERSION: u32 = 1;
 pub const RISK_PROMPT_VERSION: u32 = 1;
 pub const CLUSTER_PROMPT_VERSION: u32 = 1;
@@ -48,6 +50,45 @@ pub fn build_summary_request(
         messages: vec![ChatMessage::system(system), ChatMessage::user(user)],
         max_tokens: Some(512),
         temperature: Some(0.3),
+        stream: None,
+    }
+}
+
+// ── Full code review ──────────────────────────────────────────────────────
+
+/// Build a chat request for a comprehensive code review (summary + risk + reviewer questions + commit message).
+pub fn build_full_review_request(
+    model: &str,
+    diff_text: &str,
+    language: &str,
+) -> ChatRequest {
+    let system = format!(
+        "You are an expert senior code reviewer and software architect. Given a unified diff, \
+         conduct a thorough, structured review. Focus on intent, correctness, security, architectural \
+         coherence, and test coverage. The diff language is {language}."
+    );
+
+    let user = format!(
+        "Analyze the following diff and provide a complete code review report. Respond with a valid JSON object containing:\n\
+         - \"summary\": object with:\n\
+           - \"summary\": one concise sentence describing the primary change.\n\
+           - \"intents\": array of 2-5 bullet points explaining the core architectural intent.\n\
+           - \"risks\": array of potential risk factors or regression concerns.\n\
+         - \"risk\": object with:\n\
+           - \"risk_level\": \"low\", \"medium\", or \"high\".\n\
+           - \"justification\": brief explanation for the rating.\n\
+           - \"affected_areas\": array of components, modules, or services affected.\n\
+         - \"questions\": array of 3-5 critical questions a reviewer should ask the author.\n\
+           Each question is an object with \"question\" (string) and optional \"context\" (string).\n\
+         - \"suggested_commit\": object with \"subject\" (conventional commit format) and \"body\" (optional).\n\n\
+         ```diff\n{diff_text}\n```"
+    );
+
+    ChatRequest {
+        model: model.into(),
+        messages: vec![ChatMessage::system(system), ChatMessage::user(user)],
+        max_tokens: Some(1536),
+        temperature: Some(0.25),
         stream: None,
     }
 }
@@ -275,6 +316,144 @@ pub fn parse_commit_msg_response(json: &str) -> Result<AiCommitMessage, String> 
     serde_json::from_str(json).map_err(|e| format!("failed to parse commit: {e}"))
 }
 
+/// Parse an LLM JSON response into an `AiFullReviewReport`.
+pub fn parse_full_review_response(json: &str) -> Result<AiFullReviewReport, String> {
+    serde_json::from_str(json).map_err(|e| format!("failed to parse full review: {e}"))
+}
+
+/// Parse an LLM response into an `AiHunkExplanation`.
+pub fn parse_explain_hunk_response(text_or_json: &str) -> Result<AiHunkExplanation, String> {
+    if let Ok(parsed) = serde_json::from_str::<AiHunkExplanation>(text_or_json) {
+        return Ok(parsed);
+    }
+    let trimmed = text_or_json.trim();
+    if trimmed.is_empty() {
+        return Err("empty explanation response".into());
+    }
+    Ok(AiHunkExplanation {
+        explanation: trimmed.to_string(),
+        key_points: Vec::new(),
+    })
+}
+
+// ── Prompt Package Registry ───────────────────────────────────────────────
+
+/// Return metadata for all standard, ready-to-run prompt packages.
+pub fn list_prompt_packages() -> Vec<PromptPackageMetadata> {
+    vec![
+        PromptPackageMetadata {
+            id: "full-review".into(),
+            name: "Comprehensive Code Review".into(),
+            description: "All-in-one report: executive summary, risk level, reviewer questions, and conventional commit suggestion.".into(),
+            category: PromptCategory::Review,
+            version: FULL_REVIEW_PROMPT_VERSION,
+            default_temperature: 0.25,
+            default_max_tokens: 1536,
+            tags: vec!["review".into(), "summary".into(), "risk".into(), "questions".into()],
+        },
+        PromptPackageMetadata {
+            id: "change-summary".into(),
+            name: "Executive Change Summary".into(),
+            description: "High-level summary of intent, bulleted changes, and notable risk signals.".into(),
+            category: PromptCategory::Review,
+            version: SUMMARY_PROMPT_VERSION,
+            default_temperature: 0.3,
+            default_max_tokens: 512,
+            tags: vec!["summary".into(), "intent".into(), "tldr".into()],
+        },
+        PromptPackageMetadata {
+            id: "risk-assessment".into(),
+            name: "Risk & Blast Radius Audit".into(),
+            description: "Evaluates risk level (low/medium/high), justification, and affected modules or dependencies.".into(),
+            category: PromptCategory::Audit,
+            version: RISK_PROMPT_VERSION,
+            default_temperature: 0.2,
+            default_max_tokens: 512,
+            tags: vec!["risk".into(), "security".into(), "impact".into(), "audit".into()],
+        },
+        PromptPackageMetadata {
+            id: "review-questions".into(),
+            name: "Targeted Reviewer Questions".into(),
+            description: "Generates 3-5 critical questions focusing on edge cases, missing test fixtures, and security concerns.".into(),
+            category: PromptCategory::Review,
+            version: REVIEW_QUESTIONS_PROMPT_VERSION,
+            default_temperature: 0.4,
+            default_max_tokens: 512,
+            tags: vec!["questions".into(), "review".into(), "checklist".into()],
+        },
+        PromptPackageMetadata {
+            id: "commit-message".into(),
+            name: "Conventional Commit Generator".into(),
+            description: "Generates a structured conventional commit message (feat, fix, refactor) from staged or file diffs.".into(),
+            category: PromptCategory::Authoring,
+            version: COMMIT_MSG_PROMPT_VERSION,
+            default_temperature: 0.3,
+            default_max_tokens: 512,
+            tags: vec!["commit".into(), "git".into(), "conventional".into()],
+        },
+        PromptPackageMetadata {
+            id: "explain-hunk".into(),
+            name: "Hunk / Line Change Explainer".into(),
+            description: "Explains a specific diff hunk or selected code change in plain English.".into(),
+            category: PromptCategory::Explain,
+            version: EXPLAIN_HUNK_PROMPT_VERSION,
+            default_temperature: 0.3,
+            default_max_tokens: 256,
+            tags: vec!["explain".into(), "hunk".into(), "education".into()],
+        },
+        PromptPackageMetadata {
+            id: "intent-cluster".into(),
+            name: "Multi-File Intent Clustering".into(),
+            description: "Groups changed files by architectural intent rather than directory layout.".into(),
+            category: PromptCategory::Audit,
+            version: CLUSTER_PROMPT_VERSION,
+            default_temperature: 0.3,
+            default_max_tokens: 1024,
+            tags: vec!["cluster".into(), "theme".into(), "multi-file".into()],
+        },
+        PromptPackageMetadata {
+            id: "merge-conflict".into(),
+            name: "Merge Conflict Resolution".into(),
+            description: "3-way conflict analysis suggesting resolved code with reasoning and ambiguity flags.".into(),
+            category: PromptCategory::Merge,
+            version: MERGE_PROMPT_VERSION,
+            default_temperature: 0.2,
+            default_max_tokens: 2048,
+            tags: vec!["merge".into(), "conflict".into(), "git".into()],
+        },
+    ]
+}
+
+/// Build a `ChatRequest` for a named prompt package.
+pub fn build_package_request(
+    package_id: &str,
+    model: &str,
+    diff_text: &str,
+    language: Option<&str>,
+    file_path: Option<&str>,
+) -> Result<ChatRequest, String> {
+    let lang = language.unwrap_or("text");
+    match package_id {
+        "full-review" => Ok(build_full_review_request(model, diff_text, lang)),
+        "change-summary" | "summary" => Ok(build_summary_request(model, diff_text, lang)),
+        "risk-assessment" | "risk" => {
+            let path = file_path.unwrap_or("file");
+            Ok(build_risk_request(model, path, diff_text, lang))
+        }
+        "review-questions" | "questions" => Ok(build_review_questions_request(model, diff_text, lang)),
+        "commit-message" | "commit" => Ok(build_commit_msg_request(model, diff_text)),
+        "explain-hunk" | "explain" => Ok(build_explain_hunk_request(model, diff_text, lang)),
+        _ => Err(format!(
+            "unknown prompt package '{package_id}'. Available: {}",
+            list_prompt_packages()
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,4 +521,70 @@ mod tests {
         assert!(req.messages[1].content.contains("conventional commit"));
         assert!(req.messages[1].content.contains("subject"));
     }
+
+    #[test]
+    fn build_full_review_request_has_all_sections() {
+        let req = build_full_review_request("gpt-4o", "--- a/lib.rs\n+++ b/lib.rs\n", "rust");
+        assert_eq!(req.messages.len(), 2);
+        let user = &req.messages[1].content;
+        assert!(user.contains("summary"));
+        assert!(user.contains("risk"));
+        assert!(user.contains("questions"));
+        assert!(user.contains("suggested_commit"));
+    }
+
+    #[test]
+    fn parse_full_review_response_valid() {
+        let json = r#"{
+            "summary": { "summary": "Refactored auth", "intents": ["added jwt"], "risks": [] },
+            "risk": { "risk_level": "medium", "justification": "crypto logic", "affected_areas": ["api"] },
+            "questions": [{ "question": "Are tokens rotated?", "context": "auth.rs:42" }],
+            "suggested_commit": { "subject": "feat(auth): add jwt rotation", "body": "details" }
+        }"#;
+        let res = parse_full_review_response(json).unwrap();
+        assert_eq!(res.summary.summary, "Refactored auth");
+        assert_eq!(res.risk.risk_level, RiskLevel::Medium);
+        assert_eq!(res.questions.len(), 1);
+        assert_eq!(res.suggested_commit.unwrap().subject, "feat(auth): add jwt rotation");
+    }
+
+    #[test]
+    fn parse_explain_hunk_response_plain_text_and_json() {
+        let plain = "This change inlines the helper function for performance.";
+        let res1 = parse_explain_hunk_response(plain).unwrap();
+        assert_eq!(res1.explanation, plain);
+
+        let json = r#"{"explanation": "Updated timeout", "key_points": ["30s to 60s"]}"#;
+        let res2 = parse_explain_hunk_response(json).unwrap();
+        assert_eq!(res2.explanation, "Updated timeout");
+        assert_eq!(res2.key_points, vec!["30s to 60s"]);
+    }
+
+    #[test]
+    fn list_prompt_packages_returns_all_expected() {
+        let packages = list_prompt_packages();
+        assert!(packages.len() >= 8);
+        let ids: Vec<&str> = packages.iter().map(|p| p.id.as_str()).collect();
+        assert!(ids.contains(&"full-review"));
+        assert!(ids.contains(&"change-summary"));
+        assert!(ids.contains(&"risk-assessment"));
+        assert!(ids.contains(&"review-questions"));
+        assert!(ids.contains(&"commit-message"));
+        assert!(ids.contains(&"explain-hunk"));
+        assert!(ids.contains(&"intent-cluster"));
+        assert!(ids.contains(&"merge-conflict"));
+    }
+
+    #[test]
+    fn build_package_request_routes_correctly() {
+        let req1 = build_package_request("full-review", "gpt-4o", "diff", Some("rust"), None).unwrap();
+        assert_eq!(req1.model, "gpt-4o");
+
+        let req2 = build_package_request("risk", "claude-3", "diff", None, Some("src/main.rs")).unwrap();
+        assert!(req2.messages[1].content.contains("src/main.rs"));
+
+        let err = build_package_request("nonexistent", "gpt-4o", "diff", None, None);
+        assert!(err.is_err());
+    }
 }
+

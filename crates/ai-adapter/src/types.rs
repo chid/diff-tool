@@ -200,3 +200,45 @@ pub struct AiCommitMessage {
     pub subject: String,
     pub body: Option<String>,
 }
+
+/// Category of a prompt package.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PromptCategory {
+    Review,
+    Audit,
+    Authoring,
+    Merge,
+    Explain,
+}
+
+/// Metadata describing a prompt package.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PromptPackageMetadata {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: PromptCategory,
+    pub version: u32,
+    pub default_temperature: f32,
+    pub default_max_tokens: u32,
+    pub tags: Vec<String>,
+}
+
+/// A comprehensive full review report combining summary, risk, and reviewer questions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AiFullReviewReport {
+    pub summary: AiChangeSummary,
+    pub risk: FileRiskAssessment,
+    pub questions: Vec<ReviewQuestion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_commit: Option<AiCommitMessage>,
+}
+
+/// Plain-English explanation of a hunk or change.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AiHunkExplanation {
+    pub explanation: String,
+    pub key_points: Vec<String>,
+}
+
