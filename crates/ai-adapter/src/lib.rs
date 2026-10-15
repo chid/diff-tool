@@ -39,19 +39,21 @@
 
 mod anthropic;
 mod cache;
+pub mod cassette;
 mod openai;
 pub mod prompts;
 pub mod types;
 
 pub use anthropic::AnthropicBackend;
+pub use cassette::{Cassette, CassetteRunner, HttpInteraction, RecordedRequest, RecordedResponse};
 pub use openai::OpenAiBackend;
 
 pub use types::{
     AiChangeSummary, AiCommitMessage, AiFullReviewReport, AiHunkExplanation,
-    AiMergeResolution, BackendConfig, ChatMessage, ChatRequest, ChatResponse,
-    Chunk, ConflictHunkResolution, FileCluster, FileRiskAssessment,
-    PromptCategory, PromptPackageMetadata, Provider, ReviewQuestion,
-    RiskLevel, Role, Usage,
+    AiMergeResolution, BackendConfig, CassetteConfig, CassetteMode, ChatMessage,
+    ChatRequest, ChatResponse, Chunk, ConflictHunkResolution, FileCluster,
+    FileRiskAssessment, PromptCategory, PromptPackageMetadata, Provider,
+    ReviewQuestion, RiskLevel, Role, Usage,
 };
 
 use async_trait::async_trait;
@@ -68,6 +70,9 @@ pub enum AiError {
     #[error("serialization error: {0}")]
     Serde(#[from] serde_json::Error),
 
+    #[error("parse error: {0}")]
+    Parse(String),
+
     #[error("invalid configuration: {0}")]
     Config(String),
 
@@ -82,6 +87,9 @@ pub enum AiError {
 
     #[error("cache error: {0}")]
     Cache(String),
+
+    #[error("cassette error: {0}")]
+    Cassette(String),
 }
 
 /// Result type alias for AI adapter operations.
@@ -124,9 +132,51 @@ impl AiAdapter {
     ///
     /// Returns an error if the API key is missing or the provider is
     /// unsupported.
-    pub fn new(config: BackendConfig) -> Result<Self> {
+    pub fn new(mut config: BackendConfig) -> Result<Self> {
+        // Resolve cassette config from environment if not explicitly set
+        if config.cassette.is_none() {
+            if let Ok(path) = std::env::var("AI_CASSETTE_FILE") {
+                let mode = match std::env::var("AI_CASSETTE_MODE").as_deref() {
+                    Ok("record") => CassetteMode::Record,
+                    Ok("replay") => CassetteMode::Replay,
+                    Ok("off") => CassetteMode::Off,
+                    _ => CassetteMode::Auto,
+                };
+                config.cassette = Some(CassetteConfig {
+                    path: std::path::PathBuf::from(path),
+                    mode,
+                });
+            }
+        }
+
+        let cassette_runner = if let Some(cassette_cfg) = &config.cassette {
+            if cassette_cfg.mode != CassetteMode::Off {
+                Some(std::sync::Arc::new(std::sync::Mutex::new(
+                    cassette::CassetteRunner::new(
+                        cassette_cfg.path.clone(),
+                        cassette_cfg.mode,
+                    )?,
+                )))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // If in replay mode and API key is empty, supply placeholder to allow 100% offline testing
+        let is_replay = cassette_runner
+            .as_ref()
+            .and_then(|c| c.lock().ok())
+            .map(|r| r.is_replay())
+            .unwrap_or(false);
+
         if config.api_key.is_empty() {
-            return Err(AiError::MissingApiKey);
+            if is_replay {
+                config.api_key = "cassette-replay-placeholder-key".into();
+            } else {
+                return Err(AiError::MissingApiKey);
+            }
         }
 
         let reqwest_client = reqwest::Client::builder()
@@ -134,22 +184,28 @@ impl AiAdapter {
             .build()?;
 
         let backend: Box<dyn LlmBackend> = match config.provider {
-            Provider::OpenAI => Box::new(openai::OpenAiBackend::new(
-                config.api_key.clone(),
-                config.model.clone(),
-                config.base_url.clone(),
-                config.max_tokens,
-                config.temperature,
-                reqwest_client,
-            )),
-            Provider::Anthropic => Box::new(anthropic::AnthropicBackend::new(
-                config.api_key.clone(),
-                config.model.clone(),
-                config.base_url.clone(),
-                config.max_tokens,
-                config.temperature,
-                reqwest_client,
-            )),
+            Provider::OpenAI => Box::new(
+                openai::OpenAiBackend::new(
+                    config.api_key.clone(),
+                    config.model.clone(),
+                    config.base_url.clone(),
+                    config.max_tokens,
+                    config.temperature,
+                    reqwest_client,
+                )
+                .with_cassette(cassette_runner),
+            ),
+            Provider::Anthropic => Box::new(
+                anthropic::AnthropicBackend::new(
+                    config.api_key.clone(),
+                    config.model.clone(),
+                    config.base_url.clone(),
+                    config.max_tokens,
+                    config.temperature,
+                    reqwest_client,
+                )
+                .with_cassette(cassette_runner),
+            ),
             Provider::OpenRouter => {
                 let base_url = config
                     .base_url
@@ -160,27 +216,33 @@ impl AiAdapter {
                 } else {
                     config.model.clone()
                 };
-                Box::new(openai::OpenAiBackend::new(
-                    config.api_key.clone(),
-                    model,
-                    Some(base_url),
-                    config.max_tokens,
-                    config.temperature,
-                    reqwest_client,
-                ))
+                Box::new(
+                    openai::OpenAiBackend::new(
+                        config.api_key.clone(),
+                        model,
+                        Some(base_url),
+                        config.max_tokens,
+                        config.temperature,
+                        reqwest_client,
+                    )
+                    .with_cassette(cassette_runner),
+                )
             }
             Provider::Custom => {
                 let base_url = config.base_url.as_deref().ok_or_else(|| {
                     AiError::Config("Custom provider requires base_url".into())
                 })?;
-                Box::new(openai::OpenAiBackend::new(
-                    config.api_key.clone(),
-                    config.model.clone(),
-                    Some(base_url.to_string()),
-                    config.max_tokens,
-                    config.temperature,
-                    reqwest_client,
-                ))
+                Box::new(
+                    openai::OpenAiBackend::new(
+                        config.api_key.clone(),
+                        config.model.clone(),
+                        Some(base_url.to_string()),
+                        config.max_tokens,
+                        config.temperature,
+                        reqwest_client,
+                    )
+                    .with_cassette(cassette_runner),
+                )
             }
         };
 

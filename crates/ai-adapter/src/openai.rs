@@ -13,11 +13,17 @@ use crate::{AiError, LlmBackend, Result};
 /// Default OpenAI API base URL.
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use crate::cassette::CassetteRunner;
+
 #[derive(Debug)]
 pub struct OpenAiBackend {
     api_key: String,
     base_url: String,
     client: reqwest::Client,
+    cassette: Option<Arc<Mutex<CassetteRunner>>>,
 }
 
 impl OpenAiBackend {
@@ -33,7 +39,13 @@ impl OpenAiBackend {
             api_key,
             base_url: base_url.unwrap_or_else(|| DEFAULT_BASE_URL.to_string()),
             client,
+            cassette: None,
         }
+    }
+
+    pub fn with_cassette(mut self, cassette: Option<Arc<Mutex<CassetteRunner>>>) -> Self {
+        self.cassette = cassette;
+        self
     }
 
     fn url(&self) -> String {
@@ -127,25 +139,54 @@ struct OpenAiStreamDelta {
 impl LlmBackend for OpenAiBackend {
     async fn complete(&self, request: ChatRequest) -> Result<ChatResponse> {
         let body = self.build_body(&request);
-        let resp = self
-            .client
-            .post(&self.url())
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
+        let url = self.url();
 
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
+        let (status, text) = if let Some(cassette) = &self.cassette {
+            let req_builder = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("Content-Type", "application/json")
+                .json(&body);
+
+            let mut headers = HashMap::new();
+            headers.insert("Content-Type".into(), "application/json".into());
+            headers.insert("Authorization".into(), format!("Bearer {}", self.api_key));
+
+            crate::cassette::execute_or_record(
+                cassette,
+                req_builder,
+                "POST",
+                &url,
+                headers,
+                &body,
+            )
+            .await?
+        } else {
+            let resp = self
+                .client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await?;
+
+            let status = resp.status().as_u16();
+            let text = resp.text().await.map_err(AiError::Http)?;
+            (status, text)
+        };
+
+        if status < 200 || status >= 300 {
             return Err(AiError::Api {
-                status: status.as_u16(),
-                body,
+                status,
+                body: text,
             });
         }
 
-        let openai_resp: OpenAiResponse = resp.json().await?;
+        let openai_resp: OpenAiResponse = serde_json::from_str(&text)
+            .map_err(|e| AiError::Parse(format!("failed to parse OpenAI response: {e}")))?;
+
         let content = openai_resp
             .choices
             .into_iter()
@@ -164,6 +205,16 @@ impl LlmBackend for OpenAiBackend {
         request: ChatRequest,
         tx: tokio::sync::mpsc::Sender<Chunk>,
     ) -> Result<()> {
+        if let Some(cassette) = &self.cassette {
+            let is_replay = cassette.lock().map(|r| r.is_replay()).unwrap_or(false);
+            if is_replay {
+                let full = self.complete(request).await?;
+                let _ = tx.send(Chunk::ContentDelta(full.content.clone())).await;
+                let _ = tx.send(Chunk::Done(full)).await;
+                return Ok(());
+            }
+        }
+
         let mut body = self.build_body(&request);
         body["stream"] = serde_json::json!(true);
 

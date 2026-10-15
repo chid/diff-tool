@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use crate::types::{ChatMessage, ChatRequest, ChatResponse, Chunk, Role, Usage};
 use crate::{AiError, LlmBackend, Result};
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use crate::cassette::CassetteRunner;
+
 const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com/v1";
 /// Anthropic API version header value.
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -19,6 +24,7 @@ pub struct AnthropicBackend {
     base_url: String,
     max_tokens: u32,
     client: reqwest::Client,
+    cassette: Option<Arc<Mutex<CassetteRunner>>>,
 }
 
 impl AnthropicBackend {
@@ -35,7 +41,13 @@ impl AnthropicBackend {
             base_url: base_url.unwrap_or_else(|| ANTHROPIC_BASE_URL.to_string()),
             max_tokens,
             client,
+            cassette: None,
         }
+    }
+
+    pub fn with_cassette(mut self, cassette: Option<Arc<Mutex<CassetteRunner>>>) -> Self {
+        self.cassette = cassette;
+        self
     }
 
     fn url(&self) -> String {
@@ -189,26 +201,57 @@ struct AnthropicDelta {
 impl LlmBackend for AnthropicBackend {
     async fn complete(&self, request: ChatRequest) -> Result<ChatResponse> {
         let body = self.build_body(&request);
-        let resp = self
-            .client
-            .post(&self.url())
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
+        let url = self.url();
 
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
+        let (status, text) = if let Some(cassette) = &self.cassette {
+            let req_builder = self
+                .client
+                .post(&url)
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .header("Content-Type", "application/json")
+                .json(&body);
+
+            let mut headers = HashMap::new();
+            headers.insert("Content-Type".into(), "application/json".into());
+            headers.insert("anthropic-version".into(), ANTHROPIC_VERSION.into());
+            headers.insert("x-api-key".into(), self.api_key.clone());
+
+            crate::cassette::execute_or_record(
+                cassette,
+                req_builder,
+                "POST",
+                &url,
+                headers,
+                &body,
+            )
+            .await?
+        } else {
+            let resp = self
+                .client
+                .post(&url)
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await?;
+
+            let status = resp.status().as_u16();
+            let text = resp.text().await.map_err(AiError::Http)?;
+            (status, text)
+        };
+
+        if status < 200 || status >= 300 {
             return Err(AiError::Api {
-                status: status.as_u16(),
-                body,
+                status,
+                body: text,
             });
         }
 
-        let anthropic_resp: AnthropicResponse = resp.json().await?;
+        let anthropic_resp: AnthropicResponse = serde_json::from_str(&text)
+            .map_err(|e| AiError::Parse(format!("failed to parse Anthropic response: {e}")))?;
+
         let content = anthropic_resp
             .content
             .into_iter()
@@ -226,6 +269,16 @@ impl LlmBackend for AnthropicBackend {
         request: ChatRequest,
         tx: tokio::sync::mpsc::Sender<Chunk>,
     ) -> Result<()> {
+        if let Some(cassette) = &self.cassette {
+            let is_replay = cassette.lock().map(|r| r.is_replay()).unwrap_or(false);
+            if is_replay {
+                let full = self.complete(request).await?;
+                let _ = tx.send(Chunk::ContentDelta(full.content.clone())).await;
+                let _ = tx.send(Chunk::Done(full)).await;
+                return Ok(());
+            }
+        }
+
         let mut body = self.build_body(&request);
         body["stream"] = serde_json::json!(true);
 

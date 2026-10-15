@@ -4,8 +4,8 @@
 //! requiring real API keys or network access.
 
 use ai_adapter::{
-    AiAdapter, AiError, AnthropicBackend, BackendConfig, ChatMessage, ChatRequest, ChatResponse,
-    Chunk, LlmBackend, OpenAiBackend, Provider, RiskLevel,
+    AiAdapter, AiError, AnthropicBackend, BackendConfig, CassetteMode, ChatMessage, ChatRequest,
+    ChatResponse, Chunk, LlmBackend, OpenAiBackend, Provider, RiskLevel,
 };
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -1038,4 +1038,133 @@ fn parse_full_review_handles_nested_summary_and_case_variations() {
     assert_eq!(rep.questions.len(), 1);
     assert_eq!(rep.suggested_commit.unwrap().subject, "fix(calc): fix multiplication logic");
 }
+
+#[tokio::test]
+async fn cassette_records_live_request_and_replays_offline_without_network() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = serde_json::json!({
+        "id": "gen-cassette-test",
+        "choices": [{
+            "message": {
+                "role": "assistant",
+                "content": "{\"summary\": \"Cassette recorded summary\", \"intents\": [\"refactor\"], \"risks\": []}"
+            }
+        }],
+        "usage": { "prompt_tokens": 50, "completion_tokens": 15, "total_tokens": 65 }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let dir = std::env::temp_dir().join(format!("ai-cassette-test-{}", std::process::id()));
+    let cassette_file = dir.join("openrouter_test.json");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // ── Phase 1: Record ──────────────────────────────────────────────────
+    let record_config = BackendConfig {
+        provider: Provider::OpenRouter,
+        api_key: "sk-or-secret-token-to-sanitize".into(),
+        model: "anthropic/claude-3.5-sonnet".into(),
+        base_url: Some(mock_server.uri()),
+        ..Default::default()
+    }
+    .with_cassette(&cassette_file, CassetteMode::Record);
+
+    let record_adapter = AiAdapter::new(record_config).unwrap();
+    let req = ChatRequest {
+        model: "anthropic/claude-3.5-sonnet".into(),
+        messages: vec![ChatMessage::user("Summarize diff: +fn test() {}")],
+        max_tokens: Some(1024),
+        temperature: Some(0.3),
+        stream: None,
+    };
+
+    let record_resp = record_adapter.complete(req.clone()).await.unwrap();
+    assert!(record_resp.content.contains("Cassette recorded summary"));
+    assert!(cassette_file.exists(), "Cassette file must be saved to disk");
+
+    // Verify Authorization header was sanitized
+    let cassette_raw = std::fs::read_to_string(&cassette_file).unwrap();
+    assert!(!cassette_raw.contains("sk-or-secret-token-to-sanitize"));
+    assert!(cassette_raw.contains("Bearer [REDACTED]"));
+
+    // ── Phase 2: Offline Replay (No mock server, invalid port, empty API key) ─
+    let replay_config = BackendConfig {
+        provider: Provider::OpenRouter,
+        api_key: "".into(), // Key not required in replay mode!
+        model: "anthropic/claude-3.5-sonnet".into(),
+        base_url: Some("http://127.0.0.1:65534/v1".into()), // Dead port — would fail if network touched
+        ..Default::default()
+    }
+    .with_cassette(&cassette_file, CassetteMode::Replay);
+
+    let replay_adapter = AiAdapter::new(replay_config).expect("Replay mode allows empty API key");
+    let replay_resp = replay_adapter.complete(req).await.expect("Replay must succeed from cassette");
+
+    assert_eq!(replay_resp.content, record_resp.content);
+    assert_eq!(replay_resp.usage, record_resp.usage);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn cassette_auto_mode_records_first_then_replays() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "choices": [{
+                "message": { "role": "assistant", "content": "auto-mode content" }
+            }]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let dir = std::env::temp_dir().join(format!("ai-cassette-auto-test-{}", std::process::id()));
+    let cassette_file = dir.join("auto.json");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let req = ChatRequest {
+        model: "gpt-4o-mini".into(),
+        messages: vec![ChatMessage::user("Auto mode test")],
+        max_tokens: Some(500),
+        temperature: Some(0.2),
+        stream: None,
+    };
+
+    // First call: file doesn't exist -> records from mock server
+    let config1 = BackendConfig {
+        provider: Provider::OpenAI,
+        api_key: "sk-test".into(),
+        base_url: Some(mock_server.uri()),
+        ..Default::default()
+    }
+    .with_cassette(&cassette_file, CassetteMode::Auto);
+
+    let adapter1 = AiAdapter::new(config1).unwrap();
+    let res1 = adapter1.complete(req.clone()).await.unwrap();
+    assert_eq!(res1.content, "auto-mode content");
+    assert!(cassette_file.exists());
+
+    // Second call: file exists -> replayed without touching mock server (even if pointing to dead port)
+    let config2 = BackendConfig {
+        provider: Provider::OpenAI,
+        api_key: "".into(),
+        base_url: Some("http://127.0.0.1:65534/v1".into()),
+        ..Default::default()
+    }
+    .with_cassette(&cassette_file, CassetteMode::Auto);
+
+    let adapter2 = AiAdapter::new(config2).unwrap();
+    let res2 = adapter2.complete(req).await.unwrap();
+    assert_eq!(res2.content, "auto-mode content");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 

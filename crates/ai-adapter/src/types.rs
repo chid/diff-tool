@@ -109,6 +109,9 @@ pub struct BackendConfig {
     /// Timeout in seconds for HTTP requests.
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    /// Optional cassette recording/replay configuration.
+    #[serde(default)]
+    pub cassette: Option<CassetteConfig>,
 }
 
 fn default_max_tokens() -> u32 { 1024 }
@@ -125,8 +128,41 @@ impl Default for BackendConfig {
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
             timeout_secs: default_timeout_secs(),
+            cassette: None,
         }
     }
+}
+
+impl BackendConfig {
+    /// Configure cassette recording or replay for this backend.
+    pub fn with_cassette(mut self, path: impl Into<std::path::PathBuf>, mode: CassetteMode) -> Self {
+        self.cassette = Some(CassetteConfig {
+            path: path.into(),
+            mode,
+        });
+        self
+    }
+}
+
+/// Cassette operational mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CassetteMode {
+    /// Normal direct HTTP execution without recording or replaying.
+    Off,
+    /// Record live HTTP requests and responses into the cassette file.
+    Record,
+    /// Replay requests from the cassette file without any network calls.
+    Replay,
+    /// If the cassette file exists, replay it; if not, record it.
+    Auto,
+}
+
+/// Cassette file and mode configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CassetteConfig {
+    pub path: std::path::PathBuf,
+    pub mode: CassetteMode,
 }
 
 // ── Feature-specific types ────────────────────────────────────────────────
