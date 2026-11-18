@@ -1,5 +1,7 @@
 .document-review { overflow: auto; min-height: 0; padding: 12px clamp(16px, 4vw, 48px) 40px; color: #dee4e8; }
 .document-review > p, .document-review section { max-width: 80ch; }
+.document-review details { max-width: 80ch; margin: 12px 0; }
+.document-review summary { cursor: pointer; }
 .document-review .document-scope, .document-review small { color: #aeb8c1; font-weight: normal; }
 .document-actions { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-block: 20px; }
 .document-actions label { display: inline-flex; align-items: center; gap: 6px; }
@@ -14,10 +16,10 @@
 @media print {
   body:has(.document-review), body:has(.document-review) #root,
   .app-shell:has(.document-review), .workspace:has(.document-review), .document-review {
-    display: block; height: auto; overflow: visible; padding: 0; color: #111; background: white;
+    display: flow-root; height: auto; min-height: 0; overflow: visible; margin: 0; padding: 0; color: #111; background: white;
   }
   .app-shell:has(.document-review) .sidebar, .workspace:has(.document-review) .toolbar,
-  .document-review > p:first-child, .document-review > label, .document-review .document-actions,
+  .document-review .document-scope, .document-review > p:first-child, .document-review > label, .document-review .document-actions,
   .document-review nav { display: none; }
   .document-review .print-doc-names { display: block; font-weight: bold; }
   .document-review h2 { break-after: avoid; }

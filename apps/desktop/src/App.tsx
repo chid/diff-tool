@@ -551,7 +551,7 @@ function AppInner() {
             <Layers3 size={16} /> Gallery
           </button>
         </nav>
-        {isTauri && (
+        {isTauri && viewMode !== 'documents' && (
           <div className="tree-folders-container">
             <div className="tree-folders-header">
               <span className="tree-folders-title">Compare Folders</span>
@@ -589,7 +589,7 @@ function AppInner() {
             </div>
           </div>
         )}
-        {treeLoading ? (
+        {viewMode !== 'documents' && (treeLoading ? (
           <div className="tree-status-box tree-status-loading">
             <span className="tree-spinner" />
             <span>Comparing folders…</span>
@@ -617,7 +617,7 @@ function AppInner() {
             onSetLeft={handleSetLeft}
             onSetRight={handleSetRight}
           />
-        )}
+        ))}
       </aside>
       <section className="workspace" aria-label="Diff workspace">
         {viewMode === 'documents' ? <header className="toolbar">

@@ -60,8 +60,8 @@ export default function DocumentReview({ files }: { files: FilePair }) {
     setPosition(next + 1);
   }
   return <article ref={reviewRef} className="document-review" aria-label="Document comparison">
-    <p>Choose the original and revised files above, or drop them together. Files are read on this device.</p>
-    <p className="document-scope">Compare Word and PDF text (English OCR for scanned pages), Excel cells and formulas, or PowerPoint slide text. Word review includes direct body formatting, table structure, and uniquely matched paragraph moves. Changed Office media files are listed. Page layout and chart rendering require visual review. Word-to-PDF comparison uses body text.</p>
+    {(!files.left || !files.right) && <p>Choose the original and revised files above, or drop them together. Files are read on this device.</p>}
+    <details className="document-scope"><summary>Comparison coverage</summary><p>Compare Word and PDF text (English OCR for scanned pages), Excel cells and formulas, or PowerPoint slide text. Word review includes direct body formatting, table structure, and uniquely matched paragraph moves. Changed Office media files are listed. Page layout and chart rendering require visual review. Word-to-PDF comparison uses body text.</p></details>
     {pdfPair && <label><input type="checkbox" checked={pageMode} onChange={e => setPageMode(e.target.checked)} /> Compare rendered PDF pages</label>}
     {visual ? <Suspense fallback={<p>Loading page review…</p>}><PdfVisualReview original={files.left!} revised={files.right!} /></Suspense> :
       result && 'error' in result ? <p role="alert">{result.error}</p> :
