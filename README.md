@@ -73,7 +73,9 @@ cargo run -p diff-cli -- tui examples/text-basic/left.txt examples/text-basic/ri
 Use `./scripts/check.sh` before handing work to another agent or opening a PR.
 It runs TypeScript checks and the Rust test suite with a writable Cargo cache.
 
-## Current Status
+## Original scaffold status
+
+The lists below describe the initial scaffold. The architecture guide traces the implemented browser, desktop, and CLI paths. The developer guide walks through the same Word comparison in two runtimes. [Architecture](docs/architecture.md) · [Developer walkthrough](docs/development.md)
 
 Implemented:
 
