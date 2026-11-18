@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { readDocument, type ParsedDocument } from './read';
 import { compareDocuments, trackedReport, type Section } from './redline';
 import { textReport } from './textReport';
-import { downloadReviewReport } from './reviewReport';
+import { downloadReviewReport, governanceReport } from './reviewReport';
+import { GovernanceBrief } from './GovernanceReview';
 import { DocumentExamples } from './DocumentExamples';
 import { demoFileUrl, type DocumentDemo } from './demos';
 import './review.css';
@@ -31,6 +32,7 @@ export default function DocumentReview({ files, demoLoad }: { files: FilePair; d
   const pageMode = pagePreference ?? (files.demo?.format === 'PDF');
   const reviewRef = useRef<HTMLElement>(null);
   const [position, setPosition] = useState(0);
+  const brief = files.demo?.format === 'TXT' ? files.demo.brief : undefined;
   const pdfPair = [files.left, files.right].every(f => f && /\.pdf$/i.test(f.name));
   const visual = pageMode && pdfPair;
   useEffect(() => {
@@ -75,7 +77,8 @@ export default function DocumentReview({ files, demoLoad }: { files: FilePair; d
   }
   return <article ref={reviewRef} className="document-review" aria-label="Document comparison">
     <DocumentExamples compact={!!(files.left || files.right) || demoLoad === 'loading'} />
-    {files.demo && <p className="document-example-files">
+    {brief && <GovernanceBrief brief={brief} onDownload={() => downloadReviewReport(files.left!.name, files.right!.name, governanceReport(brief))} />}
+    {files.demo && files.demo.format !== 'TXT' && <p className="document-example-files">
       <strong>{files.demo.title}</strong>
       <a href={demoFileUrl(files.demo, 'original')} download>Download original</a>
       <a href={demoFileUrl(files.demo, 'revised')} download>Download revision</a>
@@ -90,6 +93,7 @@ export default function DocumentReview({ files, demoLoad }: { files: FilePair; d
       !sections ? <p role="status">Reading documents…</p> : <>
         {result && 'notes' in result && result.notes.map(note => <p key={note}>{note}</p>)}
         <p className="print-doc-names">{files.left.name} → {files.right.name}</p>
+        {brief && <h2>Redline of the two selected excerpts</h2>}
         <div className="document-actions">
           <strong role="status">{changes.length ? `${changes.length} changed section${changes.length === 1 ? '' : 's'}` : 'No differences in the compared text'}</strong>
           <label><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Include unchanged sections</label>
@@ -99,10 +103,10 @@ export default function DocumentReview({ files, demoLoad }: { files: FilePair; d
             <button type="button" onClick={() => navigate(1)}>Next edit</button>
           </div>}
           <button type="button" onClick={() => window.print()}>Print / Save PDF</button>
-          <button type="button" onClick={() => {
+          {!brief && <button type="button" onClick={() => {
             const original = files.left!.name, revised = files.right!.name;
             downloadReviewReport(original, revised, textReport(sections, result && 'notes' in result ? result.notes : [], original, revised));
-          }}>Download review report</button>
+          }}>Download review report</button>}
           <button type="button" onClick={() => saveReport(sections)}>Download tracked Word report</button>
         </div>
         {changes.length > 1 && <nav aria-label="Changed sections"><select aria-label="Jump to change" defaultValue="" onChange={e => {

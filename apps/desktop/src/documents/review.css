@@ -22,7 +22,31 @@
 .document-example > span { color: #bed0d6; }
 .document-example-files { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; }
 .document-example-files a { color: #a9dce6; }
+.document-review .governance-examples { max-width: 960px; margin: 12px 0 24px; }
+.governance-examples > p { color: #b6c6ce; margin: 6px 0 14px; }
+.governance-cards, .governance-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.governance-cards a { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 14px 16px; color: #e9f0f4; background: #192a2e; border: 1px solid #3d565c; border-radius: 8px; text-decoration: none; }
+.governance-cards a:hover, .governance-cards a:focus-visible { background: #243b40; border-color: #96c8cc; }
+.governance-cards strong, .governance-document { color: #a5d9cf; }
+.governance-cards small { margin-top: auto; padding-top: 5px; }
+.document-review .governance-brief { max-width: 850px; margin: 26px 0 18px; }
+.governance-brief h2 { font: 600 clamp(1.35rem, 3.5vw, 2rem)/1.15 Georgia, serif; margin: 5px 0 12px; }
+.governance-brief h3 { font-size: .95rem; margin: 16px 0 5px; }
+.governance-brief p { margin: 0 0 10px; max-width: 76ch; line-height: 1.5; }
+.governance-brief button { background: #b3e2d5; color: #122c28; border: 0; border-radius: 5px; padding: 8px 13px; font: inherit; font-weight: 650; cursor: pointer; }
+.governance-brief button:hover { background: #d3f5eb; }
+.governance-brief blockquote { margin: 7px 0 12px; font: 1.05rem/1.45 Georgia, serif; }
+.governance-brief a { color: #a9dce6; text-underline-offset: .2em; }
+.governance-document { font-size: .85rem; font-weight: 600; }
+.governance-notes { margin: 16px 0; }
+.governance-notes > div { padding: 12px 15px; border-left: 3px solid #69868c; background: #1c272f; }
+.governance-notes > div + div { border-left-color: #83baab; }
+.governance-notes h3 { margin: 0 0 7px; }
+.governance-notes a { font-size: .85rem; }
 @media print {
+  .document-review .governance-examples, .governance-brief button { display: none; }
+  .governance-brief a, .governance-document { color: #234f50; }
+  .governance-notes > div { background: white; break-inside: avoid; }
   body:has(.document-review), body:has(.document-review) #root,
   .app-shell:has(.document-review), .workspace:has(.document-review), .document-review {
     display: flow-root; height: auto; min-height: 0; overflow: visible; margin: 0; padding: 0; color: #111; background: white;

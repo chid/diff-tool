@@ -8,6 +8,16 @@ After comparison finishes, select **Download review report**. The report names t
 
 Open the downloaded HTML in a browser to read it offline or use the browser's Print command to save a PDF. The report is generated on-device from the comparison results. The separate **Download tracked Word report** action produces a DOCX for accepting or rejecting text edits. [Example contract report](https://chid.github.io/diff-tool/document-demos/supplier-report.html) · [Example launch report](https://chid.github.io/diff-tool/document-demos/launch-report.html) · [Example floor plan report](https://chid.github.io/diff-tool/document-demos/reading-room-report.html)
 
+## Review AI governance changes
+
+Each case follows one question through two dated company publications. The redline compares two short, verbatim excerpts addressing that question. Each has a dated primary-source link and a separate analyst note. Use the client question to identify evidence about a particular deployment. The cases are fixed historical snapshots. Subsequent policy changes require a new review.
+
+| Document and dates | Question for the review | App and printable HTML |
+| --- | --- | --- |
+| Google AI Principles · June 2018 and February 2025 | How can someone challenge an AI decision, and who handles it? | [Open Google review](https://chid.github.io/diff-tool/?tab=documents&example=google) · [Google report](https://chid.github.io/diff-tool/document-demos/google-governance-report.html) |
+| Claude’s Constitution · May 2023 and January 2026 | What should Claude do when a user’s request conflicts with an authorized supervisor’s instruction? | [Open Anthropic review](https://chid.github.io/diff-tool/?tab=documents&example=anthropic) · [Anthropic report](https://chid.github.io/diff-tool/document-demos/anthropic-governance-report.html) |
+| OpenAI Model Spec · September and October 2025 | How should an assistant respond to loneliness while supporting the user’s relationships with other people? | [Open OpenAI review](https://chid.github.io/diff-tool/?tab=documents&example=openai) · [OpenAI report](https://chid.github.io/diff-tool/document-demos/openai-governance-report.html) |
+
 ## Coverage against Litera Compare
 
 Litera documents text redlines, tracked Word output, and a separate page comparison for graphical PDFs. Its wider product includes synchronized review panes, Office integrations, and document-management services. [Litera product overview](https://info.litera.com/rs/046-QLX-552/images/Litera-Compare.pdf) · [Word review](https://support.litera.com/article/Reviewing-comparisons-in-Litera-Compare-for-Word-676506) · [PDF comparison modes](https://support.litera.com/article/Best-practice-for-comparing-PDF-files-in-Litera-Compare)

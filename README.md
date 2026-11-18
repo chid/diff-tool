@@ -18,6 +18,10 @@ Try a fictional pair in the live app. Each example includes both source files.
 
 The [document feature roadmap](docs/document-feature-roadmap.md) describes 15 proposed features with delivery order and acceptance tests.
 
+### Review AI governance changes with a client
+
+Three cases pair dated company publications with analyst notes and a question to investigate with a client. Explore how Google described appeals, how Anthropic prioritized human oversight, or how OpenAI addressed emotional reliance on an assistant. [Google](https://chid.github.io/diff-tool/?tab=documents&example=google) · [Anthropic](https://chid.github.io/diff-tool/?tab=documents&example=anthropic) · [OpenAI](https://chid.github.io/diff-tool/?tab=documents&example=openai) · [Case dates and printable reports](docs/document-comparison.md#review-ai-governance-changes)
+
 ### Review Public GitHub PRs & Commits
 You can inspect and review any public GitHub pull request or commit URL in the live demo:
 - **Direct PR link**: [`https://chid.github.io/diff-tool/?pr=facebook/react#28000`](https://chid.github.io/diff-tool/?pr=facebook/react#28000)

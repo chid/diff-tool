@@ -1,5 +1,6 @@
 import { FileText, Presentation, Map as MapIcon } from 'lucide-react';
 import { documentDemos } from './demos';
+import { GovernanceExamples } from './GovernanceReview';
 
 const icons = { DOCX: FileText, PPTX: Presentation, PDF: MapIcon };
 
@@ -15,7 +16,9 @@ export function DocumentExamples({ compact }: { compact: boolean }) {
       </a>;
     })}
   </div>;
+  const fileExamples = <section className="document-examples" aria-label="Document examples"><h2>Try a comparison</h2>{links}</section>;
+  const examples = <><GovernanceExamples />{fileExamples}</>;
   return compact
-    ? <details className="document-examples"><summary>Try another example</summary>{links}</details>
-    : <section className="document-examples" aria-label="Document examples"><h2>Try a comparison</h2>{links}</section>;
+    ? <details className="document-examples"><summary>Try another example</summary>{examples}</details>
+    : examples;
 }

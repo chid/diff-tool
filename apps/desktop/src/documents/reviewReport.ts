@@ -1,8 +1,10 @@
 import reportStyles from './report.css?inline';
+import type { GovernanceCase } from './governance';
 
 export interface ReviewReport {
   mode: string;
   summary: string;
+  governance?: GovernanceCase;
   highlights?: string[];
   notes: string[];
   items: {
@@ -14,15 +16,53 @@ export interface ReviewReport {
   }[];
 }
 
-function reportHtml(original: string, revised: string, report: ReviewReport) {
-  const doc = document.implementation.createHTMLDocument('Document comparison report');
-  doc.documentElement.lang = 'en';
-  function add<K extends keyof HTMLElementTagNameMap>(parent: Element, tag: K, text?: string) {
-    const element = doc.createElement(tag);
-    if (text !== undefined) element.textContent = text;
-    parent.append(element);
-    return element;
+export function governanceReport(brief: GovernanceCase): ReviewReport {
+  return { mode: 'AI governance review', summary: brief.finding, governance: brief, notes: [], items: [] };
+}
+
+function add<K extends keyof HTMLElementTagNameMap>(parent: Element, tag: K, text?: string) {
+  const element = parent.ownerDocument.createElement(tag);
+  if (text !== undefined) element.textContent = text;
+  parent.append(element);
+  return element;
+}
+
+function sourceLink(parent: Element, label: string, url: string) {
+  const link = add(parent, 'a', label);
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+}
+
+function writeGovernanceBrief(main: HTMLElement, brief: GovernanceCase) {
+  main.className = 'governance-brief';
+  const header = add(main, 'header');
+  add(header, 'p', `${brief.company} · ${brief.document}`).className = 'document-name';
+  add(header, 'h1', brief.title);
+  add(header, 'p', brief.scope).className = 'document-scope';
+  add(main, 'h2', 'Finding');
+  add(main, 'p', brief.finding).className = 'finding';
+
+  add(main, 'h2', 'Source comparison');
+  for (const [index, edition] of [brief.before, brief.after].entries()) {
+    const article = add(main, 'article');
+    add(article, 'h3', index === 0 ? 'Earlier guidance' : 'Later guidance');
+    sourceLink(article, `${edition.label} (${edition.date})`, edition.url);
+    add(article, 'blockquote', edition.excerpt).cite = edition.url;
+    add(article, 'p', 'Analyst note').className = 'analyst-label';
+    add(article, 'p', edition.text).className = 'analyst-note';
   }
+
+  const followUp = add(main, 'section');
+  followUp.className = 'follow-up';
+  add(followUp, 'h2', 'Client follow-up');
+  add(followUp, 'p', brief.question);
+  if (brief.reference) sourceLink(add(main, 'footer'), brief.reference.label, brief.reference.url);
+}
+
+function reportHtml(original: string, revised: string, report: ReviewReport) {
+  const doc = document.implementation.createHTMLDocument(report.governance?.title ?? 'Document comparison report');
+  doc.documentElement.lang = 'en';
 
   const charset = doc.createElement('meta');
   charset.setAttribute('charset', 'utf-8');
@@ -36,6 +76,12 @@ function reportHtml(original: string, revised: string, report: ReviewReport) {
   add(doc.head, 'style', reportStyles);
 
   const main = add(doc.body, 'main');
+  if (report.governance) writeGovernanceBrief(main, report.governance);
+  else writeComparison(main, original, revised, report);
+  return '<!doctype html>\n' + doc.documentElement.outerHTML;
+}
+
+function writeComparison(main: HTMLElement, original: string, revised: string, report: ReviewReport) {
   const header = add(main, 'header');
   add(header, 'h1', 'Document comparison report');
   const files = add(header, 'dl');
@@ -72,7 +118,6 @@ function reportHtml(original: string, revised: string, report: ReviewReport) {
     const notes = add(main, 'ul');
     for (const note of report.notes) add(notes, 'li', note);
   }
-  return '<!doctype html>\n' + doc.documentElement.outerHTML;
 }
 
 export function downloadReviewReport(original: string, revised: string, report: ReviewReport) {

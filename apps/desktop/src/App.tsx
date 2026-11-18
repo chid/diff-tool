@@ -13,7 +13,7 @@ import { CliSimulator } from './components/CliSimulator';
 import { GitHubReview } from './components/GitHubReview';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
-import { documentDemos, loadDemoPair } from './documents/demos';
+import { allDocumentDemos, loadDemoPair } from './documents/demos';
 import type { FilePair } from './documents/DocumentReview';
 import { isTauri } from './tauriDetect';
 import { openFileDialog, openFolderDialog, pathIsDir, getLaunchArgs, compareAi } from './tauri';
@@ -86,7 +86,7 @@ function AppInner() {
   const [documentFiles, setDocumentFiles] = useState<FilePair>({});
   const [initialDemo] = useState(() => {
     const query = new URLSearchParams(window.location.search);
-    return query.get('tab') === 'documents' ? documentDemos.find(d => d.id === query.get('example')) : undefined;
+    return query.get('tab') === 'documents' ? allDocumentDemos.find(d => d.id === query.get('example')) : undefined;
   });
   const [demoLoad, setDemoLoad] = useState<'loading' | 'error' | null>(initialDemo ? 'loading' : null);
   const lastPicked = useRef<FilePair>({});

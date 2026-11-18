@@ -19,6 +19,24 @@ section { padding: 1.2rem 0; border-top: 1px solid #c7d3d2; }
 .after { border-color: #31725a; background: #f1f8f4; }
 blockquote { white-space: pre-wrap; }
 img { display: block; margin-top: .75rem; width: auto; max-width: 100%; max-height: 78vh; object-fit: contain; }
+.governance-brief { max-width: 48rem; }
+.governance-brief header { border-bottom: 1px solid #97a9a5; padding-bottom: 1.1rem; }
+.governance-brief .document-name { color: #365e55; font-size: .9rem; font-weight: 650; margin: 0 0 .6rem; }
+.governance-brief h1 { margin-bottom: .8rem; }
+.governance-brief .document-scope { color: #495e59; }
+.governance-brief h2 { margin-top: 1.5rem; }
+.governance-brief .finding, .governance-brief .follow-up p { font: 1.16rem/1.45 Georgia, serif; }
+.governance-brief article { margin: .85rem 0; padding-left: 1rem; border-left: 2px solid #9cb8ac; }
+.governance-brief article h3 { margin: 0 0 .15rem; }
+.governance-brief a { color: #245c51; text-underline-offset: .17em; }
+.governance-brief article a, .governance-brief footer a { font-size: .9em; }
+.governance-brief blockquote { margin: .35rem 0 .55rem; font: 1.09rem/1.45 Georgia, serif; }
+.governance-brief .analyst-label { margin: 0; font-size: .85em; color: #365e55; font-weight: 650; }
+.governance-brief .analyst-note { margin: .12rem 0 0; }
+.governance-brief .follow-up { margin-top: 1.3rem; padding: .8rem 1rem; background: #f0f5f1; border: 1px solid #b4c6be; }
+.governance-brief .follow-up h2 { margin: 0; }
+.governance-brief .follow-up p { margin: .4rem 0 0; }
+.governance-brief footer { margin-top: .9rem; }
 @media print {
   @page { margin: 17mm; }
   body { background: white; font-size: 10.5pt; }
@@ -26,4 +44,15 @@ img { display: block; margin-top: .75rem; width: auto; max-width: 100%; max-heig
   h1, h2, h3, .before strong, .after strong { break-after: avoid; }
   img { max-height: 200mm; break-inside: avoid; }
   p, blockquote { orphans: 3; widows: 3; }
+  .governance-brief { max-width: none; line-height: 1.35; }
+  .governance-brief header { padding-bottom: 7pt; }
+  .governance-brief h1 { font-size: 22pt; }
+  .governance-brief h2 { margin: 9pt 0 4pt; }
+  .governance-brief article { margin: 6pt 0; }
+  .governance-brief article, .governance-brief .follow-up { break-inside: avoid; }
+  .governance-brief blockquote { margin: 3pt 0 4pt; font-size: 11.5pt; }
+  .governance-brief .follow-up { margin-top: 9pt; padding: 6pt 9pt; }
+  .governance-brief footer { margin-top: 5pt; break-inside: avoid; }
+  .governance-brief .finding, .governance-brief .follow-up p { font-size: 12pt; }
+  .governance-brief a::after { content: attr(href); display: block; font-size: 8pt; color: #475950; }
 }
