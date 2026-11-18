@@ -140,6 +140,9 @@ export function textReport(sections: Section[], notes: string[], original: strin
   const count = changedSections.length;
   const scope = [...notes];
   if (pdf) scope.push('PDF text comparison uses extracted body text and normalizes whitespace. Drawings and page layout require visual review.');
+  else if (/\.pptx$/i.test(revised)) scope.push('Slides are paired by presentation position. Embedded media are compared by package path and bytes. Slide layout, image crops and animations require visual review.');
+  else if (/\.xlsx$/i.test(revised)) scope.push('Cells are paired by sheet name and address. The comparison reads stored values, formulas and cached results. Recalculation and chart appearance require review in the workbook.');
+  else if ([original, revised].some(name => /\.docx$/i.test(name))) scope.push('Word text is read with existing tracked revisions applied. Paragraph moves require identical, uniquely matched wording. Check pagination and inherited styles in the source documents.');
   return {
     mode: pdf ? 'PDF text' : 'Document text and structure',
     summary: !sections.length ? 'There were no comparable sections.' : count

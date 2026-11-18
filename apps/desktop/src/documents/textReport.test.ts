@@ -61,6 +61,13 @@ describe('text comparison reports', () => {
     expect(report([]).summary).toContain('no comparable sections');
   });
 
+  it('names the limits of the selected format even when a pair has no detected changes', () => {
+    for (const [format, scope] of [['PPTX', 'Slide layout'], ['XLSX', 'Recalculation'], ['DOCX', 'pagination']]) {
+      const result = textReport([{ label: 'Example', status: 'unchanged', spans: [{ value: 'same' }] }], [], 'original.' + format, 'revised.' + format);
+      expect(result.notes.join(' ')).toContain(scope);
+    }
+  });
+
   it('clips both ends of long context while keeping the complete changed passage and both ends of its preview', () => {
     const original = 'old start ' + 'long old content '.repeat(40) + 'old ending';
     const revised = 'new start ' + 'long new content '.repeat(40) + 'new ending';
