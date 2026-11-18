@@ -13,6 +13,8 @@ import { CliSimulator } from './components/CliSimulator';
 import { GitHubReview } from './components/GitHubReview';
 import { useFileDiffLoader } from './useFileDiffLoader';
 import { useTreeLoader } from './useTreeLoader';
+import { documentDemos, loadDemoPair } from './documents/demos';
+import type { FilePair } from './documents/DocumentReview';
 import { isTauri } from './tauriDetect';
 import { openFileDialog, openFolderDialog, pathIsDir, getLaunchArgs, compareAi } from './tauri';
 import { listen } from '@tauri-apps/api/event';
@@ -61,7 +63,6 @@ const TEXT_BASIC_DIFF: DiffResult = {
 };
 
 const DocumentReview = lazy(() => import('./documents/DocumentReview'));
-type BrowserFiles = { left?: File; right?: File };
 const documentFile = (file?: File) => !!file && /\.(docx|xlsx|pptx|pdf)$/i.test(file.name);
 
 function AppInner() {
@@ -82,13 +83,32 @@ function AppInner() {
     return 'changes';
   });
   const [customFiles, setCustomFiles] = useState<{ left?: FileContents; right?: FileContents } | null>(null);
-  const [documentFiles, setDocumentFiles] = useState<BrowserFiles>({});
-  const lastPicked = useRef<BrowserFiles>({});
+  const [documentFiles, setDocumentFiles] = useState<FilePair>({});
+  const [initialDemo] = useState(() => {
+    const query = new URLSearchParams(window.location.search);
+    return query.get('tab') === 'documents' ? documentDemos.find(d => d.id === query.get('example')) : undefined;
+  });
+  const [demoLoad, setDemoLoad] = useState<'loading' | 'error' | null>(initialDemo ? 'loading' : null);
+  const lastPicked = useRef<FilePair>({});
   const readVersion = useRef(0);
   const fileInputLeftRef = useRef<HTMLInputElement>(null);
   const fileInputRightRef = useRef<HTMLInputElement>(null);
   const dropCounter = useRef(0);
   const { settings, updateSetting } = useSettings();
+
+  useEffect(() => {
+    if (!initialDemo) return;
+    const version = ++readVersion.current;
+    const controller = new AbortController();
+    loadDemoPair(initialDemo, controller.signal).then(pair => {
+      if (controller.signal.aborted || version !== readVersion.current) return;
+      setDocumentFiles(pair);
+      setDemoLoad(null);
+    }).catch(() => {
+      if (!controller.signal.aborted && version === readVersion.current) setDemoLoad('error');
+    });
+    return () => controller.abort();
+  }, [initialDemo]);
 
   // ── CLI arg handling (Tauri only) ────────────────────────────────────
   useEffect(() => {
@@ -195,12 +215,13 @@ function AppInner() {
     };
   }, []);
 
-  const openBrowserFiles = useCallback(async (incoming: BrowserFiles, replace = false) => {
+  const openBrowserFiles = useCallback(async (incoming: FilePair, replace = false) => {
     const version = ++readVersion.current;
+    setDemoLoad(null);
     const inDocuments = viewMode === 'documents';
     const pair = replace ? incoming : { ...(inDocuments ? documentFiles : lastPicked.current), ...incoming };
     if (inDocuments || documentFile(pair.left) || documentFile(pair.right)) {
-      setDocumentFiles(pair);
+      setDocumentFiles({ left: pair.left, right: pair.right });
       setViewMode('documents');
       return;
     }
@@ -708,7 +729,7 @@ function AppInner() {
           </div>
         </header>)}
         {viewMode === 'documents' ? (
-          <Suspense fallback={<p role="status">Loading document review…</p>}><DocumentReview files={documentFiles} /></Suspense>
+          <Suspense fallback={<p role="status">Loading document review…</p>}><DocumentReview files={documentFiles} demoLoad={demoLoad} /></Suspense>
         ) : viewMode === 'github' ? (
           <GitHubReview />
         ) : viewMode === 'playground' ? (

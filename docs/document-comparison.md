@@ -52,7 +52,7 @@ From the repository root, run the following with Node 22.18 or newer. The refere
 ```sh
 npm ci
 npm run build
-npx playwright test tests/e2e/document_comparison.spec.ts
+npx playwright test 'document_.*spec.ts'
 node scripts/benchmark-litera.mjs /path/to/pte-2020-02-redline.pdf
 node scripts/benchmark-litera.mjs /path/to/2022-15702-and-2024-06059.pdf
 node scripts/benchmark-document-redline.mjs

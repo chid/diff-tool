@@ -13,6 +13,15 @@
 .document-review [role=alert] { color: #ffbcb9; }
 .document-review .print-doc-names { display: none; }
 .document-prose [data-edit-start]:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.document-review .document-examples { max-width: 960px; margin-block: 12px 22px; }
+.document-example-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 195px), 1fr)); gap: 10px; margin-top: 12px; }
+.document-example { display: grid; align-content: start; gap: 8px; padding: 0 15px 15px; overflow: hidden; color: #e9f0f4; text-decoration: none; border: 1px solid #43525c; border-radius: 8px; background: #1c272f; }
+.document-example-preview { display: block; width: calc(100% + 30px); max-width: none; height: auto; aspect-ratio: 15 / 8; object-fit: cover; margin: 0 -15px 5px; }
+.document-example:hover, .document-example:focus-visible { background: #24343d; border-color: #83b4bb; }
+.document-example-format { display: inline-flex; gap: 6px; align-items: center; font-size: .75rem; }
+.document-example > span { color: #bed0d6; }
+.document-example-files { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; }
+.document-example-files a { color: #a9dce6; }
 @media print {
   body:has(.document-review), body:has(.document-review) #root,
   .app-shell:has(.document-review), .workspace:has(.document-review), .document-review {
@@ -20,7 +29,7 @@
   }
   .app-shell:has(.document-review) .sidebar, .workspace:has(.document-review) .toolbar,
   .document-review .document-scope, .document-review > p:first-child, .document-review > label, .document-review .document-actions,
-  .document-review nav { display: none; }
+  .document-review nav, .document-review .document-examples, .document-review .document-example-files { display: none; }
   .document-review .print-doc-names { display: block; font-weight: bold; }
   .document-review h2 { break-after: avoid; }
   .document-prose del { color: #981b1b; background: transparent; }

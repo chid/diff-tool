@@ -10,6 +10,14 @@ Cross-platform, local-first diff and merge tool prototype powered by a high-perf
 
 Open **Documents** to compare Word, PDF, Excel, and PowerPoint files on your device. Review word changes, download a tracked Word report, or compare PDF pages visually. The coverage matrix includes the measured results against a published Litera redline. [Document comparison and benchmark](docs/document-comparison.md)
 
+Try a fictional pair in the live app. Each example includes both source files.
+
+- Follow a moved packing clause and a shorter payment deadline in the [supplier agreement (Word)](https://chid.github.io/diff-tool/?tab=documents&example=supplier).
+- Review a larger first shipment and new bottle artwork in the [coffee launch deck (PowerPoint)](https://chid.github.io/diff-tool/?tab=documents&example=launch).
+- Find the aisle that opened between two tables in the [reading room floor plan (PDF)](https://chid.github.io/diff-tool/?tab=documents&example=reading-room).
+
+The [document feature roadmap](docs/document-feature-roadmap.md) describes 15 proposed features with delivery order and acceptance tests.
+
 ### Review Public GitHub PRs & Commits
 You can inspect and review any public GitHub pull request or commit URL in the live demo:
 - **Direct PR link**: [`https://chid.github.io/diff-tool/?pr=facebook/react#28000`](https://chid.github.io/diff-tool/?pr=facebook/react#28000)

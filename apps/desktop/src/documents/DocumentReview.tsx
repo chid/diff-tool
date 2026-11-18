@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { readDocument, type ParsedDocument } from './read';
 import { compareDocuments, trackedReport, type Section } from './redline';
+import { DocumentExamples } from './DocumentExamples';
+import { demoFileUrl, type DocumentDemo } from './demos';
 import './review.css';
 
 const PdfVisualReview = lazy(() => import('./PdfVisualReview'));
 
-export type FilePair = { left?: File; right?: File };
+export type FilePair = { left?: File; right?: File; demo?: DocumentDemo };
 type Result = { sections: Section[]; notes: string[] } | { error: string };
 
 function saveReport(sections: Section[]) {
@@ -18,12 +20,13 @@ function saveReport(sections: Section[]) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function DocumentReview({ files }: { files: FilePair }) {
+export default function DocumentReview({ files, demoLoad }: { files: FilePair; demoLoad: 'loading' | 'error' | null }) {
   const [finished, setFinished] = useState<{ files: FilePair; result: Result }>();
   // Retain only successful reads of the same File object while it is in use.
   const parsedFiles = useRef(new WeakMap<File, ParsedDocument>());
   const [showAll, setShowAll] = useState(false);
-  const [pageMode, setPageMode] = useState(false);
+  const [pagePreference, setPageMode] = useState<boolean>();
+  const pageMode = pagePreference ?? (files.demo?.format === 'PDF');
   const reviewRef = useRef<HTMLElement>(null);
   const [position, setPosition] = useState(0);
   const pdfPair = [files.left, files.right].every(f => f && /\.pdf$/i.test(f.name));
@@ -69,12 +72,19 @@ export default function DocumentReview({ files }: { files: FilePair }) {
     setPosition(next + 1);
   }
   return <article ref={reviewRef} className="document-review" aria-label="Document comparison">
-    {(!files.left || !files.right) && <p>Choose the original and revised files above, or drop them together. Files are read on this device.</p>}
+    <DocumentExamples compact={!!(files.left || files.right) || demoLoad === 'loading'} />
+    {files.demo && <p className="document-example-files">
+      <strong>{files.demo.title}</strong>
+      <a href={demoFileUrl(files.demo, 'original')} download>Download original</a>
+      <a href={demoFileUrl(files.demo, 'revised')} download>Download revision</a>
+    </p>}
     <details className="document-scope"><summary>Comparison coverage</summary><p>Compare Word and PDF text (English OCR for scanned pages), Excel cells and formulas, or PowerPoint slide text. Word review includes direct body formatting, table structure, and uniquely matched paragraph moves. Changed Office media files are listed. Page layout and chart rendering require visual review. Word-to-PDF comparison uses body text.</p></details>
     {pdfPair && <label><input type="checkbox" checked={pageMode} onChange={e => setPageMode(e.target.checked)} /> Compare rendered PDF pages</label>}
     {visual ? <Suspense fallback={<p>Loading page review…</p>}><PdfVisualReview original={files.left!} revised={files.right!} /></Suspense> :
       result && 'error' in result ? <p role="alert">{result.error}</p> :
-      !files.left || !files.right ? <p role="status">Choose {files.left ? 'the revised file' : files.right ? 'the original file' : 'two files'} to begin.</p> :
+      demoLoad === 'error' ? <p role="alert">The example could not be loaded. Select it again to retry, or choose your own files.</p> :
+      demoLoad === 'loading' ? <p role="status">Loading example files…</p> :
+      !files.left || !files.right ? <p role="status">Choose {files.left ? 'the revised file' : files.right ? 'the original file' : 'two files above, or drop a pair here'} to begin. Files are read on this device.</p> :
       !sections ? <p role="status">Reading documents…</p> : <>
         {result && 'notes' in result && result.notes.map(note => <p key={note}>{note}</p>)}
         <p className="print-doc-names">{files.left.name} → {files.right.name}</p>

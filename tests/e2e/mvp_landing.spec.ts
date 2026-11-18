@@ -27,5 +27,12 @@ test.describe('MVP landing and examples', () => {
     await page.getByRole('button', { name: /Unicode & accents/ }).click();
     await expect(page.locator('.diff-pane')).toContainText('café');
     await expect(page.locator('.intra-highlight').filter({ hasText: 'é' })).toHaveCount(1);
+    await page.getByRole('link', { name: 'Try document examples' }).click();
+    const examples = page.getByRole('region', { name: 'Document examples' });
+    await expect(examples.getByRole('link')).toHaveCount(3);
+    for (const preview of await examples.locator('img').all()) {
+      await preview.scrollIntoViewIfNeeded();
+      await expect.poll(() => preview.evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    }
   });
 });

@@ -241,6 +241,7 @@ export function DemoGallery({ onBack }: DemoGalleryProps = {}) {
           })}
         </nav>
         <div className="demo-sidebar-footer">
+          <a className="toolbar-open-btn" href="?tab=documents">Try document examples</a>
           <span className="demo-sidebar-badge">
             <ArrowRightLeft size={12} />
             Powered by diff-core (Rust) + @pierre/diffs

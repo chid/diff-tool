@@ -44,7 +44,7 @@ For the desktop shell, install the platform prerequisites for Tauri 2 and run `n
 | Check | Command from the repository root | What it exercises |
 | --- | --- | --- |
 | Word alignment and tracked output | `npx vitest run --root apps/desktop src/documents/redline.test.ts` | Direct comparison and exported Word XML, including move detection and whitespace round-trips. |
-| Browser document workflow | `npx playwright test tests/e2e/document_comparison.spec.ts` | File pickers, drops, errors, navigation, OCR, visual PDF comparison, and downloads. On a fresh machine, run `npx playwright install chromium` first. Playwright starts or reuses Vite on port 5173. |
+| Browser document workflow | `npx playwright test 'document_.*spec.ts'` | File pickers, the three document demos, drops, errors, navigation, OCR, visual PDF comparison, and downloads. On a fresh machine, run `npx playwright install chromium` first. Playwright starts or reuses Vite on port 5173. |
 | Browser build | `npm run build` | TypeScript compilation and production assets. Serve the build with `npm run preview` when investigating asset-loading errors. |
 | Native Office behavior | `cargo test --locked -p office-adapter` | The Rust adapter and its fixtures. For CLI output and exit codes, use `cargo test --locked -p diff-cli`. |
 | Repository pre-handoff check | `./scripts/check.sh` | TypeScript checking and Rust workspace tests, including the Tauri crate. This check needs the native build dependencies. Run the relevant Vitest and Playwright checks separately. |

@@ -37,6 +37,14 @@ jobs:
       - name: Typecheck and build demo site
         run: npm run build
 
+      - name: Test document comparisons in the production build
+        env:
+          PLAYWRIGHT_PREVIEW: '1'
+        run: |
+          npx vitest run --root apps/desktop src/documents/redline.test.ts
+          npx playwright install --with-deps chromium
+          npx playwright test 'document_.*spec.ts' tests/e2e/mvp_landing.spec.ts
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
