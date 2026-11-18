@@ -150,3 +150,28 @@ test('reports a relocated clause and a table-only structure change', async ({ pa
   await expect(page.getByRole('list', { name: 'Moved paragraphs' })).toContainText('Paragraph 1 moved to 3 · Alpha');
   await expect(page.getByRole('heading', { name: /Table 1 row 1 structure/ })).toBeVisible();
 });
+
+test('changing one file reuses the other scan and rereads a replacement with the same filename', async ({ page }) => {
+  const reads: string[] = [];
+  await page.exposeFunction('recordDocumentRead', (name: string) => reads.push(name));
+  await page.addInitScript(() => {
+    const read = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = function () {
+      void (window as unknown as { recordDocumentRead(name: string): Promise<void> }).recordDocumentRead(this.name);
+      return read.call(this);
+    };
+  });
+  await open(page, left, pdf('scanned-right'));
+  await expect(page.locator('.document-prose ins')).toHaveText('right', { timeout: 30_000 });
+  const count = () => reads.filter(n => n === 'scanned-right.pdf').length;
+  const initialReads = count();
+  expect(initialReads).toBeGreaterThan(0);
+  await page.getByLabel('Choose original file').setInputFiles(right);
+  await expect(page.getByText('No differences in the compared text')).toBeVisible();
+  expect(count()).toBe(initialReads);
+  await page.getByLabel('Choose revised file').setInputFiles({
+    name: 'scanned-right.pdf', mimeType: 'application/pdf', buffer: Buffer.from('broken'),
+  });
+  await expect(page.getByRole('alert')).toBeVisible();
+  expect(count()).toBeGreaterThan(initialReads);
+});

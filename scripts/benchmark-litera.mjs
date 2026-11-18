@@ -7,9 +7,18 @@ import { compareDocuments } from '../apps/desktop/src/documents/redline.ts';
 
 const pdf = process.argv[2];
 const digest = createHash('sha256').update(readFileSync(pdf)).digest('hex');
-if (digest !== 'f9a8139704db3bb7ddc583ea8a824e1b2f323965626663d2d3a5138d93ca6b44') {
-  throw new Error('Expected the Dechert PTE 2020-02 redline specified in docs/document-comparison.md');
-}
+const references = {
+  f9a8139704db3bb7ddc583ea8a824e1b2f323965626663d2d3a5138d93ca6b44: {
+    name: 'PTE 2020-02', rows: 76, exact: 63,
+    deletions: { marked: 193, agreed: 180, extra: 0 }, insertions: { marked: 252, agreed: 239, extra: 0 },
+  },
+  '28bcd8d18e6ee5c526fc169819a73c2ff17a19348eb499c86a3ca1edd968d36d': {
+    name: '2022-15702 and 2024-06059', rows: 55, exact: 41,
+    deletions: { marked: 162, agreed: 145, extra: 0 }, insertions: { marked: 179, agreed: 159, extra: 3 },
+  },
+};
+const reference = references[digest];
+if (!reference) throw new Error('Expected one of the two PDFs linked in docs/document-comparison.md.');
 const xml = execFileSync('pdftohtml', ['-i', '-xml', '-stdout', pdf], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
 const document = new JSDOM(xml, { contentType: 'text/xml' }).window.document;
 const colors = new Map([...document.querySelectorAll('fontspec')].map(el => [el.id, el.getAttribute('color')]));
@@ -70,13 +79,15 @@ for (const page of [...document.querySelectorAll('page')].slice(0, -1)) {
   evaluate(row);
 }
 if (!rows) throw new Error('No eligible marked rows found.');
-console.log(JSON.stringify({ rows, exact, ...scores }, null, 2));
+console.log(JSON.stringify({ reference: reference.name, rows, exact, ...scores }, null, 2));
 
-// Keep precision as well as recall: marking every word would inflate recall.
-const f1 = ({ agreed, detected, marked }) => 2 * agreed / (detected + marked);
-if (rows !== 76 || exact < 61 ||
-    f1(scores.deletions) < 2 * 178 / (184 + 193) ||
-    f1(scores.insertions) < 2 * 238 / (243 + 252)) {
-  console.error('The benchmark population changed or word-mark agreement fell below the recorded baseline.');
+// Guard recall and extra marks separately on the same pinned word positions.
+const regressed = Object.entries(scores).some(([side, score]) => {
+  const expected = reference[side];
+  return score.marked !== expected.marked || score.agreed < expected.agreed ||
+    score.detected - score.agreed > expected.extra;
+});
+if (rows !== reference.rows || exact < reference.exact || regressed) {
+  console.error('The population or word-mark agreement failed the published reference baseline.');
   process.exitCode = 1;
 }

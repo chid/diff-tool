@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { readDocument } from './read';
+import { readDocument, type ParsedDocument } from './read';
 import { compareDocuments, trackedReport, type Section } from './redline';
 import './review.css';
 
@@ -20,6 +20,8 @@ function saveReport(sections: Section[]) {
 
 export default function DocumentReview({ files }: { files: FilePair }) {
   const [finished, setFinished] = useState<{ files: FilePair; result: Result }>();
+  // Retain only successful reads of the same File object while it is in use.
+  const parsedFiles = useRef(new WeakMap<File, ParsedDocument>());
   const [showAll, setShowAll] = useState(false);
   const [pageMode, setPageMode] = useState(false);
   const reviewRef = useRef<HTMLElement>(null);
@@ -31,7 +33,14 @@ export default function DocumentReview({ files }: { files: FilePair }) {
     const controller = new AbortController();
     const { left, right } = files;
     if (left && right && !visual) {
-      Promise.all([readDocument(left, controller.signal), readDocument(right, controller.signal)])
+      async function parse(file: File) {
+        const cached = parsedFiles.current.get(file);
+        if (cached) return cached;
+        const doc = await readDocument(file, controller.signal);
+        if (!controller.signal.aborted) parsedFiles.current.set(file, doc);
+        return doc;
+      }
+      Promise.all([parse(left), parse(right)])
         .then(([a, b]) => ({
           sections: compareDocuments(a, b),
           notes: [a, b].flatMap((doc, i) => doc.ocrPages?.length

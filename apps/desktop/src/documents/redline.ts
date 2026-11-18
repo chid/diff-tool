@@ -1,4 +1,4 @@
-import { diffArrays, diffWordsWithSpace } from 'diff';
+import { diffArrays, diffWords, diffWordsWithSpace, type ChangeObject } from 'diff';
 import { strToU8, zipSync } from 'fflate';
 import type { ParsedDocument } from './read';
 
@@ -10,11 +10,41 @@ export interface Section {
   status: 'unchanged' | 'modified' | 'added' | 'removed';
 }
 
-function movedParagraphs(original: string, revised: string) {
-  const before = original.split('\n'), after = revised.split('\n');
-  if (before.length < 2 || after.length < 2) return [];
-  const edits = diffArrays(before, after, { timeout: 250 });
-  if (!edits) return [];
+// diffWords aligns words and punctuation without treating a common space as a match.
+// It can normalize whitespace. Only use those spans when accepting and rejecting
+// every edit would reproduce both inputs exactly.
+function reconstructs(spans: Span[], before: string, after: string) {
+  let oldOffset = 0, newOffset = 0;
+  for (const span of spans) {
+    if (!span.added) {
+      if (!before.startsWith(span.value, oldOffset)) return false;
+      oldOffset += span.value.length;
+    }
+    if (!span.removed) {
+      if (!after.startsWith(span.value, newOffset)) return false;
+      newOffset += span.value.length;
+    }
+  }
+  return oldOffset === before.length && newOffset === after.length;
+}
+
+function wordSpans(before: string, after: string, deadline: number): Span[] {
+  if (before === after) return before ? [{ value: before }] : [];
+  if (!before) return [{ value: after, added: true }];
+  if (!after) return [{ value: before, removed: true }];
+  const remaining = () => deadline - performance.now();
+  if (remaining() > 0) {
+    const spans = diffWords(before, after, { timeout: remaining() });
+    if (spans && reconstructs(spans, before, after)) return spans;
+    if (spans && remaining() > 0) {
+      const exact = diffWordsWithSpace(before, after, { timeout: remaining() });
+      if (exact) return exact;
+    }
+  }
+  return [{ value: before, removed: true }, { value: after, added: true }];
+}
+
+function movedParagraphs(before: string[], after: string[], edits: ChangeObject<string[]>[]) {
   function positions(lines: string[]) {
     const index = new Map<string, number>();
     lines.forEach((line, i) => index.set(line, index.has(line) ? -1 : i + 1));
@@ -26,6 +56,66 @@ function movedParagraphs(original: string, revised: string) {
     const from = oldPositions.get(text), to = newPositions.get(text);
     return text.trim() && removed.has(text) && from && from > 0 && to && to > 0 && from !== to ? [{ text, from, to }] : [];
   });
+}
+
+function canPairInOrder(before: string[], after: string[]) {
+  if (before.length !== after.length) return false;
+  const changed = new Set<string>();
+  for (let i = 0; i < before.length; i++) {
+    const a = before[i], b = after[i];
+    if (a === b) continue;
+    // Only pair edited paragraphs with substantial shared context at an edge.
+    // Otherwise use the paragraph diff, which can align insertions and moves.
+    const start = a.slice(0, 16), end = a.slice(-16);
+    if (!(start.trim().length >= 12 && b.startsWith(start)) &&
+        !(end.trim().length >= 12 && b.endsWith(end))) return false;
+    changed.add(a);
+  }
+  // An exact match at another position takes precedence over similar context.
+  return !after.some((text, i) => text !== before[i] && changed.has(text));
+}
+
+function bodyChanges(original: string, revised: string, deadline: number) {
+  const before = original.split('\n'), after = revised.split('\n');
+  if (before.length === 1 || after.length === 1) {
+    return { spans: wordSpans(original, revised, deadline), moves: [] };
+  }
+  const spans: Span[] = [];
+  function append(part: Span) {
+    if (!part.value) return;
+    const last = spans.at(-1);
+    if (last && !!last.added === !!part.added && !!last.removed === !!part.removed) last.value += part.value;
+    else spans.push({ value: part.value, added: part.added, removed: part.removed });
+  }
+  if (canPairInOrder(before, after)) {
+    for (let i = 0; i < before.length; i++) {
+      if (i) append({ value: '\n' });
+      for (const part of wordSpans(before[i], after[i], deadline)) append(part);
+    }
+    return { spans, moves: [] };
+  }
+
+  const edits = diffArrays(before, after, { timeout: 250 });
+  if (!edits) return { spans: wordSpans(original, revised, deadline), moves: [] };
+  // Exact paragraph blocks anchor the word comparison. Include the intervening
+  // separators in the gaps so leading, blank and trailing lines survive export.
+  let oldOffset = 0, newOffset = 0, oldEnd = 0, newEnd = 0;
+  function gap(oldStart: number, newStart: number) {
+    for (const part of wordSpans(original.slice(oldEnd, oldStart), revised.slice(newEnd, newStart), deadline)) append(part);
+  }
+  for (const edit of edits) {
+    const block = edit.value.join('\n');
+    if (!edit.added && !edit.removed) {
+      gap(oldOffset, newOffset);
+      append({ value: block });
+      oldEnd = oldOffset + block.length;
+      newEnd = newOffset + block.length;
+    }
+    if (!edit.added) oldOffset += block.length + 1;
+    if (!edit.removed) newOffset += block.length + 1;
+  }
+  gap(original.length, revised.length);
+  return { spans, moves: movedParagraphs(before, after, edits) };
 }
 
 export function compareDocuments(left: ParsedDocument, right: ParsedDocument): Section[] {
@@ -45,11 +135,10 @@ export function compareDocuments(left: ParsedDocument, right: ParsedDocument): S
     else if (a === undefined) result.push({ label, status: 'added', spans: [{ value: b!, added: true }] });
     else if (b === undefined) result.push({ label, status: 'removed', spans: [{ value: a, removed: true }] });
     else {
-      const spans = diffWordsWithSpace(a, b, { timeout: 1500 });
-      // Whole-section replacement still reconstructs both texts if detailed alignment times out.
-      const moves = label === 'Document body' && left.format === 'docx' && right.format === 'docx'
-        ? movedParagraphs(a, b) : undefined;
-      result.push({ label, status: 'modified', spans: spans ?? [{ value: a, removed: true }, { value: b, added: true }], moves });
+      const deadline = performance.now() + 1500;
+      const changes = label === 'Document body' && left.format === 'docx' && right.format === 'docx'
+        ? bodyChanges(a, b, deadline) : { spans: wordSpans(a, b, deadline) };
+      result.push({ label, status: 'modified', ...changes });
     }
   }
   if (left.format === right.format && left.media && right.media) {
@@ -66,7 +155,8 @@ export function compareDocuments(left: ParsedDocument, right: ParsedDocument): S
   return result;
 }
 
-const escapeXml = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+// A literal CR is normalized to LF by XML parsers, including inside w:t.
+const escapeXml = (s: string) => s.replace(/[&<>\r]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\r': '&#13;' })[c]!);
 
 export function trackedReport(sections: Section[]) {
   let id = 0;

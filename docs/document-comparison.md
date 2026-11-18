@@ -23,23 +23,39 @@ Dechert published a redline for PTE 2020-02 made by Litera Compare for Word 11.4
 
 The broader benchmark uses the same browser comparison function on colored text runs extracted from the PDF. It selects physical lines with retained black text, deleted red words and inserted blue words. It excludes move colors and the summary page, normalizes each run to words, and evaluates both sides by word position. A line matches exactly only when every insertion and deletion mark agrees on both sides. Identical wording can still have different boundaries when one engine marks a whole phrase.
 
-| Measure | Result |
-| --- | ---: |
-| Eligible lines with complete word-mark agreement | 61 / 76 |
-| Litera-marked inserted word positions also marked by Diff Tool | 238 / 252 |
-| Additional inserted word positions marked by Diff Tool | 5 |
-| Litera-marked deleted word positions also marked by Diff Tool | 178 / 193 |
-| Additional deleted word positions marked by Diff Tool | 6 |
+A second redline was held back until the alignment change was implemented. It uses the same publisher, Litera version, and line-selection rules, with a different pair of documents. [Dechert redline for 2022-15702 and 2024-06059](https://www.dechert.com/content/dam/dechert%20files/knowledge/onpoint/2024/4/Litera%20Compare%20Redline%20-%202022-15702%20and%202024-06059.pdf)
 
-These figures measure text-mark agreement on one reconstructed sample. They do not measure legal accuracy, full-document reading order, punctuation, formatting, moves, or fidelity to Litera's 429-change summary. The benchmark pins the PDF by SHA-256 and fails if the eligible population changes or exact agreement or per-side F1 falls below this baseline.
+| Measure | PTE before | PTE after | Second redline before | Second redline after |
+| --- | ---: | ---: | ---: | ---: |
+| Lines with exact agreement | 61 / 76 | 63 / 76 | 40 / 55 | 41 / 55 |
+| Reference insertions also marked | 238 / 252 | 239 / 252 | 157 / 179 | 159 / 179 |
+| Extra inserted word positions | 5 | 0 | 8 | 3 |
+| Reference deletions also marked | 178 / 193 | 180 / 193 | 143 / 162 | 145 / 162 |
+| Extra deleted word positions | 6 | 0 | 5 | 0 |
 
-From the repository root, run the following with Node 22.18 or newer. The reference benchmark also needs Poppler's `pdftohtml` and a local copy of the linked PDF.
+The benchmark pins each PDF by SHA-256 and checks exact lines, matched positions, and extra marks independently. Scores apply to reconstructed word marks on the eligible lines. Some lines include list labels with identical original and revised text that Litera marked as replacements. Punctuation, moves, formatting, full-document layout, and legal significance fall outside these measurements.
+
+## Comparison speed
+
+The browser compares corresponding edited paragraphs directly when their order and surrounding text support that pairing. When paragraphs move, exact paragraph matches anchor the word comparison. Word alignment is checked against both inputs so whitespace changes survive accepting or rejecting the report. Selecting a new revision reuses the successfully parsed original while that file is still selected, including any OCR result.
+
+The benchmark below compares 1,500 synthetic clauses, each with one occurrence of the word being replaced. Results are median comparison times from seven measured runs after one warm-up on `u.local`, Node 22.23.3. These timings exclude file parsing, OCR and rendering. Both versions reproduced the complete original and revision and retained the same proportion of original characters in all three scenarios.
+
+| Changed clauses | Before (734f9b5) | After |
+| --- | ---: | ---: |
+| One | 9.0 ms | 1.4 ms |
+| Every tenth | 21.8 ms | 3.8 ms |
+| Every clause | 842.2 ms | 23.3 ms |
+
+From the repository root, run the following with Node 22.18 or newer. The reference benchmark also needs Poppler's `pdftohtml` and local copies of the two linked PDFs.
 
 ```sh
 npm ci
 npm run build
 npx playwright test tests/e2e/document_comparison.spec.ts
-node scripts/benchmark-litera.mjs /path/to/dechert-redline.pdf
+node scripts/benchmark-litera.mjs /path/to/pte-2020-02-redline.pdf
+node scripts/benchmark-litera.mjs /path/to/2022-15702-and-2024-06059.pdf
+node scripts/benchmark-document-redline.mjs
 ```
 
 The browser tests use local fixtures, including a searchable PDF exported from the repository's revised Word fixture and a one-page image-only PDF with the same sentence. They exercise uploads, drag-and-drop, a corrupt input followed by recovery, formula-only changes, paragraph moves, direct Word formatting, tracked report export, English OCR, and visual page comparison.
