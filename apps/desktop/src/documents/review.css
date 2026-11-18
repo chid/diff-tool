@@ -1,0 +1,26 @@
+.document-review { overflow: auto; min-height: 0; padding: 12px clamp(16px, 4vw, 48px) 40px; color: #dee4e8; }
+.document-review > p, .document-review section { max-width: 80ch; }
+.document-review .document-scope, .document-review small { color: #aeb8c1; font-weight: normal; }
+.document-actions { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-block: 20px; }
+.document-actions label { display: inline-flex; align-items: center; gap: 6px; }
+.document-actions button, .document-review select { color: inherit; background: #253239; border: 1px solid #516069; border-radius: 5px; padding: 6px 10px; cursor: pointer; }
+.document-review h2 { font-size: 1rem; margin-block: 1.5em .5em; }
+.document-prose { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.document-prose ins { color: #c7f8d2; background: #1e4930; }
+.document-prose del { color: #ffd4d2; background: #542b2c; }
+.document-review [role=alert] { color: #ffbcb9; }
+.document-review .print-doc-names { display: none; }
+.document-prose [data-edit-start]:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+@media print {
+  body:has(.document-review), body:has(.document-review) #root,
+  .app-shell:has(.document-review), .workspace:has(.document-review), .document-review {
+    display: block; height: auto; overflow: visible; padding: 0; color: #111; background: white;
+  }
+  .app-shell:has(.document-review) .sidebar, .workspace:has(.document-review) .toolbar,
+  .document-review > p:first-child, .document-review > label, .document-review .document-actions,
+  .document-review nav { display: none; }
+  .document-review .print-doc-names { display: block; font-weight: bold; }
+  .document-review h2 { break-after: avoid; }
+  .document-prose del { color: #981b1b; background: transparent; }
+  .document-prose ins { color: #174e78; background: transparent; }
+}

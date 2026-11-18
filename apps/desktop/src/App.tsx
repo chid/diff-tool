@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { FilePlus2, FileMinus2, GitBranch, GitPullRequest, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play, Sparkles } from 'lucide-react';
+import { lazy, Suspense, useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { FileText, FilePlus2, FileMinus2, GitBranch, GitPullRequest, Image, Layers3, SplitSquareHorizontal, TerminalSquare, FolderOpen, Play, Sparkles } from 'lucide-react';
 import { DiffPane } from './components/DiffPane';
 import { FileTreePane } from './components/FileTreePane';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -60,6 +60,10 @@ const TEXT_BASIC_DIFF: DiffResult = {
   truncated: false,
 };
 
+const DocumentReview = lazy(() => import('./documents/DocumentReview'));
+type BrowserFiles = { left?: File; right?: File };
+const documentFile = (file?: File) => !!file && /\.(docx|xlsx|pptx|pdf)$/i.test(file.name);
+
 function AppInner() {
   const [activePath, setActivePath] = useState<string | undefined>(undefined);
   const [leftPath, setLeftPath] = useState<string | undefined>(undefined);
@@ -68,8 +72,9 @@ function AppInner() {
   const [leftFolderPath, setLeftFolderPath] = useState<string | undefined>(undefined);
   const [rightFolderPath, setRightFolderPath] = useState<string | undefined>(undefined);
   const [dropOverlay, setDropOverlay] = useState(false);
-  const [viewMode, setViewMode] = useState<'changes' | 'playground' | 'cli' | 'gallery' | 'github'>(() => {
+  const [viewMode, setViewMode] = useState<'changes' | 'playground' | 'cli' | 'gallery' | 'github' | 'documents'>(() => {
     const p = new URLSearchParams(window.location.search);
+    if (p.get('tab') === 'documents') return 'documents';
     if (p.get('pr') || p.get('commit') || p.get('tab') === 'github') return 'github';
     if (p.get('tab') === 'playground' || p.get('demo') === 'playground') return 'playground';
     if (p.get('tab') === 'cli' || p.get('demo') === 'cli') return 'cli';
@@ -77,6 +82,9 @@ function AppInner() {
     return 'changes';
   });
   const [customFiles, setCustomFiles] = useState<{ left?: FileContents; right?: FileContents } | null>(null);
+  const [documentFiles, setDocumentFiles] = useState<BrowserFiles>({});
+  const lastPicked = useRef<BrowserFiles>({});
+  const readVersion = useRef(0);
   const fileInputLeftRef = useRef<HTMLInputElement>(null);
   const fileInputRightRef = useRef<HTMLInputElement>(null);
   const dropCounter = useRef(0);
@@ -187,6 +195,28 @@ function AppInner() {
     };
   }, []);
 
+  const openBrowserFiles = useCallback(async (incoming: BrowserFiles, replace = false) => {
+    const version = ++readVersion.current;
+    const inDocuments = viewMode === 'documents';
+    const pair = replace ? incoming : { ...(inDocuments ? documentFiles : lastPicked.current), ...incoming };
+    if (inDocuments || documentFile(pair.left) || documentFile(pair.right)) {
+      setDocumentFiles(pair);
+      setViewMode('documents');
+      return;
+    }
+    lastPicked.current = pair;
+    const [left, right] = await Promise.all([pair.left?.text(), pair.right?.text()]);
+    if (version !== readVersion.current) return;
+    setCustomFiles({
+      left: { name: pair.left?.name ?? pair.right!.name, contents: left ?? '' },
+      right: { name: pair.right?.name ?? pair.left!.name, contents: right ?? '' },
+    });
+    setLeftPath(pair.left?.name);
+    setRightPath(pair.right?.name);
+    setActivePath(undefined);
+    setViewMode('changes');
+  }, [viewMode, documentFiles]);
+
   // ── Drag-and-drop handling (Browser web mode) ────────────────────────
   useEffect(() => {
     if (isTauri) return;
@@ -208,26 +238,10 @@ function AppInner() {
       const files = Array.from(e.dataTransfer?.files ?? []);
       if (files.length === 0) return;
 
-      if (files.length >= 2) {
-        const text0 = await files[0].text();
-        const text1 = await files[1].text();
-        setCustomFiles({
-          left: { name: files[0].name, contents: text0 },
-          right: { name: files[1].name, contents: text1 },
-        });
-        setLeftPath(files[0].name);
-        setRightPath(files[1].name);
-        setActivePath(undefined);
-      } else if (files.length === 1) {
-        const text0 = await files[0].text();
-        setCustomFiles({
-          left: { name: files[0].name, contents: '' },
-          right: { name: files[0].name, contents: text0 },
-        });
-        setLeftPath(undefined);
-        setRightPath(files[0].name);
-        setActivePath(undefined);
-      }
+      if (files.length >= 2) await openBrowserFiles({ left: files[0], right: files[1] }, true);
+      else if (viewMode === 'documents' || documentFile(files[0])) {
+        await openBrowserFiles(documentFiles.left ? { right: files[0] } : { left: files[0] });
+      } else await openBrowserFiles({ right: files[0] }, true);
     };
 
     window.addEventListener('dragover', handleDragOver);
@@ -239,7 +253,7 @@ function AppInner() {
       window.removeEventListener('dragleave', handleDragLeave);
       window.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [openBrowserFiles, viewMode, documentFiles]);
 
   // Browser visual test harness — accessed via ?test=diff
   const searchParams = new URLSearchParams(window.location.search);
@@ -423,30 +437,10 @@ function AppInner() {
     }
   }, []);
 
-  const handleBrowserLeftUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const text = await file.text();
-      setCustomFiles((prev) => ({
-        left: { name: file.name, contents: text },
-        right: prev?.right ?? { name: file.name, contents: '' },
-      }));
-      setLeftPath(file.name);
-      setActivePath(undefined);
-    }
-  };
-
-  const handleBrowserRightUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const text = await file.text();
-      setCustomFiles((prev) => ({
-        left: prev?.left ?? { name: file.name, contents: '' },
-        right: { name: file.name, contents: text },
-      }));
-      setRightPath(file.name);
-      setActivePath(undefined);
-    }
+  const handleBrowserUpload = (side: 'left' | 'right', input: HTMLInputElement) => {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) void openBrowserFiles({ [side]: file });
   };
 
   const handleOpenLeftFolder = useCallback(async () => {
@@ -497,13 +491,17 @@ function AppInner() {
       <input
         type="file"
         ref={fileInputLeftRef}
-        onChange={handleBrowserLeftUpload}
+        aria-label="Choose original file"
+        accept={viewMode === 'documents' ? '.docx,.pdf,.xlsx,.pptx,.txt' : undefined}
+        onChange={e => handleBrowserUpload('left', e.currentTarget)}
         style={{ display: 'none' }}
       />
       <input
         type="file"
         ref={fileInputRightRef}
-        onChange={handleBrowserRightUpload}
+        aria-label="Choose revised file"
+        accept={viewMode === 'documents' ? '.docx,.pdf,.xlsx,.pptx,.txt' : undefined}
+        onChange={e => handleBrowserUpload('right', e.currentTarget)}
         style={{ display: 'none' }}
       />
     <main className="app-shell">
@@ -520,6 +518,9 @@ function AppInner() {
             type="button"
           >
             <GitBranch size={16} /> Changes
+          </button>
+          <button className={viewMode === 'documents' ? 'active' : ''} onClick={() => setViewMode('documents')} type="button">
+            <FileText size={16} /> Documents
           </button>
           <button
             className={viewMode === 'github' ? 'active' : ''}
@@ -619,6 +620,18 @@ function AppInner() {
         )}
       </aside>
       <section className="workspace" aria-label="Diff workspace">
+        {viewMode === 'documents' ? <header className="toolbar">
+          <div><h1>Compare documents</h1>
+            <div className="toolbar-file-picker">
+              <button className="toolbar-open-btn" type="button" onClick={() => fileInputLeftRef.current?.click()}>
+                <FileMinus2 size={14} /> Original · {documentFiles.left?.name ?? 'Choose file'}
+              </button>
+              <button className="toolbar-open-btn" type="button" onClick={() => fileInputRightRef.current?.click()}>
+                <FilePlus2 size={14} /> Revised · {documentFiles.right?.name ?? 'Choose file'}
+              </button>
+            </div>
+          </div>
+        </header> : (
         <header className="toolbar">
           <div>
             <h1>
@@ -693,8 +706,10 @@ function AppInner() {
               <span>GitHub</span>
             </a>
           </div>
-        </header>
-        {viewMode === 'github' ? (
+        </header>)}
+        {viewMode === 'documents' ? (
+          <Suspense fallback={<p role="status">Loading document review…</p>}><DocumentReview files={documentFiles} /></Suspense>
+        ) : viewMode === 'github' ? (
           <GitHubReview />
         ) : viewMode === 'playground' ? (
           <Playground />

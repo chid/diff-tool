@@ -1,4 +1,4 @@
-import { SplitSquareHorizontal, GitBranch, GitPullRequest, Layers3, TerminalSquare, ArrowRight } from 'lucide-react';
+import { FileText, SplitSquareHorizontal, GitBranch, GitPullRequest, Layers3, TerminalSquare, ArrowRight } from 'lucide-react';
 
 interface WelcomeHeroProps {
   /** Callback when user clicks explore examples button. */
@@ -47,6 +47,7 @@ export function WelcomeHero({ onExplore, onReviewGitHub }: WelcomeHeroProps) {
           diffs with high-speed side-by-side split rendering.
         </p>
         <div className="welcome-actions">
+          <a className="welcome-btn" href="?tab=documents"><FileText size={16} /> Compare documents</a>
           {onReviewGitHub && (
             <button className="welcome-btn welcome-btn-primary" onClick={onReviewGitHub} type="button">
               <GitPullRequest size={16} />

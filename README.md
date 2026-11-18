@@ -6,6 +6,10 @@ Cross-platform, local-first diff and merge tool prototype powered by a high-perf
 
 👉 **[Try the Live Web Demo](https://chid.github.io/diff-tool/)** (Interactive diff playground, GitHub PR & commit review, syntax-aware tree-sitter diffing, and CLI simulator).
 
+### Compare documents
+
+Open **Documents** to compare Word, PDF, Excel, and PowerPoint files on your device. Review word changes, download a tracked Word report, or compare PDF pages visually. The coverage matrix includes the measured results against a published Litera redline. [Document comparison and benchmark](docs/document-comparison.md)
+
 ### Review Public GitHub PRs & Commits
 You can inspect and review any public GitHub pull request or commit URL in the live demo:
 - **Direct PR link**: [`https://chid.github.io/diff-tool/?pr=facebook/react#28000`](https://chid.github.io/diff-tool/?pr=facebook/react#28000)
