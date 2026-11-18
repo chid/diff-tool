@@ -2,6 +2,12 @@
 
 Open **Documents**, choose an original and a revision, or drop two files on the app in that order. The direct route is `?tab=documents`. Document contents, PDF rendering, and English OCR stay in the browser. The app serves the OCR worker, engine, and language model from its own assets on demand.
 
+## Write a comparison report
+
+After comparison finishes, select **Download review report**. The report names the original and revision, summarizes the observed differences, and includes evidence from the comparison. For text and Office documents it quotes changed passages and records detected moves or media changes. For rendered PDFs it identifies changed, added, and removed pages and embeds their preview images. The report follows the selected comparison mode.
+
+Open the downloaded HTML in a browser to read it offline or use the browser's Print command to save a PDF. The report is generated on-device from the comparison results. The separate **Download tracked Word report** action produces a DOCX for accepting or rejecting text edits. [Example contract report](https://chid.github.io/diff-tool/document-demos/supplier-report.html) · [Example launch report](https://chid.github.io/diff-tool/document-demos/launch-report.html) · [Example floor plan report](https://chid.github.io/diff-tool/document-demos/reading-room-report.html)
+
 ## Coverage against Litera Compare
 
 Litera documents text redlines, tracked Word output, and a separate page comparison for graphical PDFs. Its wider product includes synchronized review panes, Office integrations, and document-management services. [Litera product overview](https://info.litera.com/rs/046-QLX-552/images/Litera-Compare.pdf) · [Word review](https://support.litera.com/article/Reviewing-comparisons-in-Litera-Compare-for-Word-676506) · [PDF comparison modes](https://support.litera.com/article/Best-practice-for-comparing-PDF-files-in-Litera-Compare)
@@ -14,7 +20,7 @@ Litera documents text redlines, tracked Word output, and a separate page compari
 | Graphical PDFs | Compare rendered pages by position with highlighted pixel differences and page additions/removals | Render resolution is capped at 1,400 pixels on the long edge. A page insertion can shift subsequent comparisons. |
 | Excel | Named sheets, worksheet order, cell locations, values, types, formulas and cached results | Dates and numbers use their stored representation. Charts, spreadsheet recalculation, and rendered cell styling need additional coverage. |
 | PowerPoint | Slide text by presentation order; embedded Office media bytes compared by package path | Slide masters, animations, chart rendering, and the placement/cropping of the same image need additional coverage. |
-| Share results | Download a newly generated Word report with tracked text edits, or print the visible review to PDF | The Word report contains extracted content and section labels. Original document layout and formatting are not reconstructed in the report. |
+| Share results | Download a self-contained HTML review report, a Word report with tracked text edits, or print the visible text review to PDF | The HTML report covers the selected mode. The Word report contains extracted content and section labels in a new document. |
 | Enterprise use | Browser file pickers and local drag-and-drop | Office add-ins, DMS integrations, one-to-many comparisons, and PDF/A export are outside this implementation. |
 
 ## Published reference benchmark

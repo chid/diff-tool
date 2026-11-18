@@ -8,7 +8,7 @@ Cross-platform, local-first diff and merge tool prototype powered by a high-perf
 
 ### Compare documents
 
-Open **Documents** to compare Word, PDF, Excel, and PowerPoint files on your device. Review word changes, download a tracked Word report, or compare PDF pages visually. The coverage matrix includes the measured results against a published Litera redline. [Document comparison and benchmark](docs/document-comparison.md)
+Open **Documents** to compare Word, PDF, Excel, and PowerPoint files on your device. Choose **Download review report** for a printable summary with supporting passages or highlighted PDF pages. The self-contained HTML file opens offline. For editable Word revisions, use **Download tracked Word report**. [Example supplier report](https://chid.github.io/diff-tool/document-demos/supplier-report.html) · [Document comparison and benchmark](docs/document-comparison.md)
 
 Try a fictional pair in the live app. Each example includes both source files.
 

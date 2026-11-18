@@ -46,6 +46,8 @@ flowchart LR
 
 **5. Review or export.** React renders deletions and insertions from those spans. `trackedReport` serializes them as WordprocessingML revisions in a new DOCX package. The writer receives all sections, including ones hidden by the review filter. The export preserves comparison text, adds labels for auxiliary sections, and represents media changes with descriptions. Recreating source pagination, styles, and embedded objects would require a richer model. Printing uses the visible review. [Review controls](../apps/desktop/src/documents/DocumentReview.tsx) · [DOCX writer](../apps/desktop/src/documents/redline.ts)
 
+The HTML review report uses the same comparison result. Text mode turns spans and detected moves into a summary and before-and-after excerpts. Visual PDF mode waits until the current pair finishes, then embeds the page previews in the download. The shared writer creates a standalone document with embedded styles. The Pages build saves three fictional example reports from the browser tests that validate them. [Text report](../apps/desktop/src/documents/textReport.ts) · [Visual report](../apps/desktop/src/documents/visualReport.ts) · [HTML writer](../apps/desktop/src/documents/reviewReport.ts)
+
 ## Where the evidence stops
 
 | Boundary | Consequence for review |

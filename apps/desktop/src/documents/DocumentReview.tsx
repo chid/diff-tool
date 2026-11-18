@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { readDocument, type ParsedDocument } from './read';
 import { compareDocuments, trackedReport, type Section } from './redline';
+import { textReport } from './textReport';
+import { downloadReviewReport } from './reviewReport';
 import { DocumentExamples } from './DocumentExamples';
 import { demoFileUrl, type DocumentDemo } from './demos';
 import './review.css';
@@ -97,6 +99,10 @@ export default function DocumentReview({ files, demoLoad }: { files: FilePair; d
             <button type="button" onClick={() => navigate(1)}>Next edit</button>
           </div>}
           <button type="button" onClick={() => window.print()}>Print / Save PDF</button>
+          <button type="button" onClick={() => {
+            const original = files.left!.name, revised = files.right!.name;
+            downloadReviewReport(original, revised, textReport(sections, result && 'notes' in result ? result.notes : [], original, revised));
+          }}>Download review report</button>
           <button type="button" onClick={() => saveReport(sections)}>Download tracked Word report</button>
         </div>
         {changes.length > 1 && <nav aria-label="Changed sections"><select aria-label="Jump to change" defaultValue="" onChange={e => {
